@@ -56,3 +56,24 @@ def test_missing_document_returns_404():
     response = client.get("/v1/documents/00000000-0000-0000-0000-000000000001")
     assert response.status_code == 404
     assert response.json()["detail"] == "Document not found"
+
+
+def test_stored_instructions_generate_pending_requirement_candidates():
+    uploaded = client.post(
+        "/v1/documents",
+        files={"file": ("instructions.txt", b"Submit proof of address. Welcome!", "text/plain")},
+    )
+    assert uploaded.status_code == 200
+    document_id = uploaded.json()["id"]
+    response = client.get(f"/v1/documents/{document_id}/requirements")
+    assert response.status_code == 200
+    requirements = response.json()
+    assert len(requirements) == 1
+    assert requirements[0]["status"] == "pending"
+    assert requirements[0]["evidence"] == []
+    assert requirements[0]["description"] == "Submit proof of address."
+
+
+def test_missing_document_requirement_candidates_return_404():
+    response = client.get("/v1/documents/00000000-0000-0000-0000-000000000001/requirements")
+    assert response.status_code == 404
