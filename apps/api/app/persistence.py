@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, create_engine
@@ -48,6 +48,16 @@ class EvidenceRow(Base):
     page: Mapped[int | None] = mapped_column(nullable=True)
 
 
+class DocumentRow(Base):
+    __tablename__ = "documents"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    filename: Mapped[str] = mapped_column(String(240))
+    media_type: Mapped[str] = mapped_column(String(120))
+    sha256: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 def build_engine(url: str | None = None):
     return create_engine(url or DATABASE_URL, pool_pre_ping=True)
 
@@ -67,6 +77,27 @@ def session_scope(factory):
         raise
     finally:
         session.close()
+
+
+class DocumentRepository:
+    def __init__(self, session):
+        self.session = session
+
+    def add(self, document) -> DocumentRow:
+        existing = self.session.query(DocumentRow).filter_by(sha256=document.sha256).one_or_none()
+        if existing is not None:
+            return existing
+        row = DocumentRow(
+            id=document.id,
+            filename=document.filename,
+            media_type=document.media_type,
+            sha256=document.sha256,
+            text=document.text,
+            created_at=datetime.now(timezone.utc),
+        )
+        self.session.add(row)
+        self.session.flush()
+        return row
 
 
 class WorkspaceRepository:
