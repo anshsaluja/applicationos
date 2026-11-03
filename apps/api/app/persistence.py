@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, create_engine
@@ -93,7 +93,7 @@ class DocumentRepository:
             media_type=document.media_type,
             sha256=document.sha256,
             text=document.text,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         self.session.add(row)
         self.session.flush()
