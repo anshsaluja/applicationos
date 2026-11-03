@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.persistence import DocumentRow, get_session_factory if False else build_session_factory
+from app.persistence import DocumentRow, build_session_factory
 
 client = TestClient(app)
 
