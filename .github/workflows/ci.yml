@@ -12,6 +12,22 @@ permissions:
 jobs:
   api:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: applicationos
+          POSTGRES_PASSWORD: applicationos
+          POSTGRES_DB: applicationos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U applicationos -d applicationos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://applicationos:applicationos@localhost:5432/applicationos
     defaults:
       run:
         working-directory: apps/api
@@ -26,5 +42,13 @@ jobs:
         run: pip install -e '.[dev]'
       - name: Lint
         run: ruff check .
+      - name: Prepare PostgreSQL schema
+        run: |
+          python - <<'PY'
+          from app.persistence import Base, engine
+          with engine.begin() as connection:
+              connection.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
+          Base.metadata.create_all(bind=engine)
+          PY
       - name: Test
         run: pytest -q
