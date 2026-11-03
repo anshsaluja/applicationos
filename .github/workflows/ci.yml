@@ -45,10 +45,15 @@ jobs:
       - name: Prepare PostgreSQL schema
         run: |
           python - <<'PY'
-          from app.persistence import Base, engine
-          with engine.begin() as connection:
-              connection.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
-          Base.metadata.create_all(bind=engine)
+          from app.persistence import Base, build_engine
+
+          engine = build_engine()
+          try:
+              with engine.begin() as connection:
+                  connection.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
+              Base.metadata.create_all(bind=engine)
+          finally:
+              engine.dispose()
           PY
       - name: Test
         run: pytest -q
