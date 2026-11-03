@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+import os
+from contextlib import contextmanager
+from datetime import datetime
+from uuid import UUID
+
+from sqlalchemy import DateTime, ForeignKey, String, Text, create_engine
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+
+from .domain.models import ApplicationWorkspace, Evidence, Requirement, RequirementStatus
+
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://applicationos:applicationos@localhost:5432/applicationos")
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class WorkspaceRow(Base):
+    __tablename__ = "workspaces"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    application_type: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    requirements: Mapped[list["RequirementRow"]] = relationship(cascade="all, delete-orphan")
+
+
+class RequirementRow(Base):
+    __tablename__ = "requirements"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    workspace_id: Mapped[UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(240))
+    description: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), default=RequirementStatus.PENDING.value)
+    deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    evidence: Mapped[list["EvidenceRow"]] = relationship(cascade="all, delete-orphan")
+
+
+class EvidenceRow(Base):
+    __tablename__ = "evidence"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    requirement_id: Mapped[UUID] = mapped_column(ForeignKey("requirements.id", ondelete="CASCADE"), index=True)
+    source_document_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), index=True)
+    source_label: Mapped[str] = mapped_column(String(240))
+    excerpt: Mapped[str] = mapped_column(Text)
+    page: Mapped[int | None] = mapped_column(nullable=True)
+
+
+def build_engine(url: str | None = None):
+    return create_engine(url or DATABASE_URL, pool_pre_ping=True)
+
+
+def build_session_factory(url: str | None = None):
+    return sessionmaker(bind=build_engine(url), expire_on_commit=False)
+
+
+@contextmanager
+def session_scope(factory):
+    session = factory()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+class WorkspaceRepository:
+    def __init__(self, session):
+        self.session = session
+
+    def create(self, workspace: ApplicationWorkspace) -> ApplicationWorkspace:
+        self.session.add(WorkspaceRow(id=workspace.id, name=workspace.name, application_type=workspace.application_type, created_at=workspace.created_at))
+        self.session.flush()
+        return workspace
+
+    def add_requirement(self, workspace_id: UUID, requirement: Requirement) -> Requirement:
+        row = RequirementRow(id=requirement.id, workspace_id=workspace_id, title=requirement.title, description=requirement.description, status=requirement.status.value, deadline=requirement.deadline)
+        row.evidence = [EvidenceRow(id=e.id, source_document_id=e.source_document_id, source_label=e.source_label, excerpt=e.excerpt, page=e.page) for e in requirement.evidence]
+        self.session.add(row)
+        self.session.flush()
+        return requirement
+
+    def list_requirements(self, workspace_id: UUID) -> list[Requirement]:
+        rows = self.session.query(RequirementRow).filter_by(workspace_id=workspace_id).all()
+        return [Requirement(id=r.id, title=r.title, description=r.description, status=RequirementStatus(r.status), deadline=r.deadline, evidence=[Evidence(id=e.id, source_document_id=e.source_document_id, source_label=e.source_label, excerpt=e.excerpt, page=e.page) for e in r.evidence]) for r in rows]
