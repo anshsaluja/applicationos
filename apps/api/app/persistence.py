@@ -100,6 +100,10 @@ class DocumentRepository:
         return row
 
 
+    def get(self, document_id: UUID) -> DocumentRow | None:
+        return self.session.get(DocumentRow, document_id)
+
+
 class WorkspaceRepository:
     def __init__(self, session):
         self.session = session

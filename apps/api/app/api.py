@@ -1,4 +1,6 @@
-from fastapi import APIRouter, UploadFile
+from uuid import UUID
+
+from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from .documents import ingest_upload
@@ -41,4 +43,13 @@ async def upload_document(file: UploadFile) -> DocumentResponse:
     document = await ingest_upload(file)
     with session_scope(get_session_factory()) as session:
         row = DocumentRepository(session).add(document)
+        return DocumentResponse(id=str(row.id), filename=row.filename, sha256=row.sha256, text=row.text)
+
+
+@router.get("/documents/{document_id}", response_model=DocumentResponse, tags=["documents"])
+def get_document(document_id: UUID) -> DocumentResponse:
+    with session_scope(get_session_factory()) as session:
+        row = DocumentRepository(session).get(document_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Document not found")
         return DocumentResponse(id=str(row.id), filename=row.filename, sha256=row.sha256, text=row.text)

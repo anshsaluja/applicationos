@@ -40,3 +40,19 @@ def test_rejects_unsupported_document_type():
 def test_rejects_empty_document():
     response = client.post("/v1/documents", files={"file": ("empty.txt", b"", "text/plain")})
     assert response.status_code == 422
+
+
+def test_uploaded_document_can_be_retrieved_with_same_provenance():
+    payload = b"Evidence must include an official statement."
+    uploaded = client.post("/v1/documents", files={"file": ("statement.txt", payload, "text/plain")})
+    assert uploaded.status_code == 200
+    document_id = uploaded.json()["id"]
+    retrieved = client.get(f"/v1/documents/{document_id}")
+    assert retrieved.status_code == 200
+    assert retrieved.json() == uploaded.json()
+
+
+def test_missing_document_returns_404():
+    response = client.get("/v1/documents/00000000-0000-0000-0000-000000000001")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Document not found"
