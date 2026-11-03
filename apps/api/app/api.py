@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from .documents import ingest_upload
+from .extraction import extract_requirements
 from .domain.evaluator import evaluate_requirements
 from .domain.models import Requirement
 from .persistence import DocumentRepository, build_session_factory, session_scope
@@ -53,3 +54,13 @@ def get_document(document_id: UUID) -> DocumentResponse:
         if row is None:
             raise HTTPException(status_code=404, detail="Document not found")
         return DocumentResponse(id=str(row.id), filename=row.filename, sha256=row.sha256, text=row.text)
+
+
+@router.get("/documents/{document_id}/requirements", response_model=list[Requirement], tags=["requirements"])
+def document_requirement_candidates(document_id: UUID) -> list[Requirement]:
+    """Extract review candidates from stored instructions, not proof of satisfaction."""
+    with session_scope(get_session_factory()) as session:
+        row = DocumentRepository(session).get(document_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return extract_requirements(row.id, row.filename, row.text)
