@@ -24,7 +24,7 @@ class WorkspaceRow(Base):
     name: Mapped[str] = mapped_column(String(200))
     application_type: Mapped[str] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    requirements: Mapped[list["RequirementRow"]] = relationship(cascade="all, delete-orphan")
+    requirements: Mapped[list[RequirementRow]] = relationship(cascade="all, delete-orphan")
 
 
 class RequirementRow(Base):
@@ -35,7 +35,7 @@ class RequirementRow(Base):
     description: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default=RequirementStatus.PENDING.value)
     deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    evidence: Mapped[list["EvidenceRow"]] = relationship(cascade="all, delete-orphan")
+    evidence: Mapped[list[EvidenceRow]] = relationship(cascade="all, delete-orphan")
 
 
 class EvidenceRow(Base):
