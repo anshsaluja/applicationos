@@ -64,3 +64,32 @@ def document_requirement_candidates(document_id: UUID) -> list[Requirement]:
         if row is None:
             raise HTTPException(status_code=404, detail="Document not found")
         return extract_requirements(row.id, row.filename, row.text)
+
+
+class RequirementSourceResponse(BaseModel):
+    requirement_id: str
+    instruction_excerpt: str
+    source_document_id: str
+    source_label: str
+    status: str
+    satisfaction_evidence: list[str]
+
+
+@router.get("/documents/{document_id}/requirement-sources", response_model=list[RequirementSourceResponse], tags=["requirements"])
+def document_requirement_sources(document_id: UUID) -> list[RequirementSourceResponse]:
+    """Expose instruction provenance separately from compliance evidence."""
+    with session_scope(get_session_factory()) as session:
+        row = DocumentRepository(session).get(document_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return [
+            RequirementSourceResponse(
+                requirement_id=str(requirement.id),
+                instruction_excerpt=requirement.description,
+                source_document_id=str(row.id),
+                source_label=row.filename,
+                status=requirement.status.value,
+                satisfaction_evidence=[],
+            )
+            for requirement in extract_requirements(row.id, row.filename, row.text)
+        ]
