@@ -13,7 +13,7 @@ def test_requirement_sources_are_attributed_to_stored_instructions():
     text = "You must provide proof of address. Submit a valid ID."
     with session_scope(get_session_factory()) as session:
         row = DocumentRepository(session).add(
-            IngestedDocument(id=source_id, filename="instructions.txt", text=text, sha256="a" * 64)
+            IngestedDocument(id=source_id, filename="instructions.txt", media_type="text/plain", text=text, sha256="a" * 64)
         )
         document_id = row.id
     response = TestClient(app).get(f"/v1/documents/{document_id}/requirement-sources")
