@@ -41,3 +41,51 @@ def test_unsatisfied_dependency_blocks_requirement() -> None:
     )
     result = evaluate_requirements([parent, child])
     assert result.requirements[1].status == RequirementStatus.BLOCKED
+
+
+def test_dependency_uses_recomputed_status_not_stale_input() -> None:
+    parent = Requirement(
+        title="Identity", description="ID", status=RequirementStatus.SATISFIED
+    )
+    child = Requirement(
+        title="Review", description="Review", evidence=[evidence("review", "approved")],
+        depends_on=[parent.id],
+    )
+    result = evaluate_requirements([child, parent])
+    assert [r.status for r in result.requirements] == [
+        RequirementStatus.BLOCKED, RequirementStatus.MISSING
+    ]
+
+
+def test_satisfied_dependency_chain_is_order_independent() -> None:
+    root = Requirement(title="ID", description="ID", evidence=[evidence("id", "valid")])
+    middle = Requirement(
+        title="Check", description="Check", depends_on=[root.id],
+        evidence=[evidence("check", "complete")],
+    )
+    leaf = Requirement(
+        title="Submit", description="Submit", depends_on=[middle.id],
+        evidence=[evidence("submission", "complete")],
+    )
+    result = evaluate_requirements([leaf, middle, root])
+    assert all(r.status == RequirementStatus.SATISFIED for r in result.requirements)
+
+
+def test_cyclic_dependencies_fail_closed() -> None:
+    first = Requirement(title="First", description="First", evidence=[evidence("a", "yes")])
+    second = Requirement(
+        title="Second", description="Second", evidence=[evidence("b", "yes")],
+        depends_on=[first.id],
+    )
+    first.depends_on = [second.id]
+    result = evaluate_requirements([first, second])
+    assert all(r.status == RequirementStatus.BLOCKED for r in result.requirements)
+
+
+def test_unknown_dependency_blocks_even_with_evidence() -> None:
+    requirement = Requirement(
+        title="Check", description="Check", evidence=[evidence("check", "done")],
+        depends_on=[uuid4()],
+    )
+    result = evaluate_requirements([requirement])
+    assert result.requirements[0].status == RequirementStatus.BLOCKED
