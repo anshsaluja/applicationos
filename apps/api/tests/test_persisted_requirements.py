@@ -24,3 +24,23 @@ def test_persisted_requirements_are_idempotent_and_pending() -> None:
 def test_persist_requirements_missing_document() -> None:
     response = client.post("/v1/documents/00000000-0000-0000-0000-000000000001/requirements/persist")
     assert response.status_code == 404
+
+
+def test_workspace_read_returns_persisted_requirements() -> None:
+    uploaded = client.post(
+        "/v1/documents",
+        files={"file": ("workspace-read.txt", b"You must submit a bank statement.", "text/plain")},
+    )
+    assert uploaded.status_code == 200
+    document_id = uploaded.json()["id"]
+    persisted = client.post(f"/v1/documents/{document_id}/requirements/persist")
+    assert persisted.status_code == 200
+    workspace_id = persisted.json()["workspace_id"]
+    read = client.get(f"/v1/workspaces/{workspace_id}/requirements")
+    assert read.status_code == 200
+    assert read.json() == persisted.json()
+
+
+def test_workspace_read_missing_workspace() -> None:
+    response = client.get("/v1/workspaces/00000000-0000-0000-0000-000000000001/requirements")
+    assert response.status_code == 404
