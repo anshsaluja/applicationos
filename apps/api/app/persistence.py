@@ -157,11 +157,11 @@ class ApprovalRepository:
         )
 
     def decide(self, action_id: UUID, requested, *, reviewer_id: str, reason: str | None = None):
-        from .domain.approvals import ApprovalStatus, decide
-
         # Serialize decisions for the same action, including when no row exists yet.
         # A transaction-scoped advisory lock prevents two first-time writers racing.
         from sqlalchemy import text
+
+        from .domain.approvals import ApprovalStatus, decide
 
         lock_key = int.from_bytes(action_id.bytes[:8], "big", signed=True)
         self.session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
