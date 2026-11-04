@@ -86,3 +86,74 @@ def test_rejects_invalid_utf8_without_internal_server_error():
     )
     assert response.status_code == 422
     assert response.json()["detail"] == "Plain-text document must be valid UTF-8"
+
+
+
+def test_rejects_pdf_exceeding_page_limit():
+    import fitz
+
+    pdf = fitz.open()
+    for _ in range(101):
+        pdf.new_page()
+    payload = pdf.tobytes()
+    pdf.close()
+
+    response = client.post(
+        "/v1/documents",
+        files={"file": ("too-many-pages.pdf", payload, "application/pdf")},
+    )
+    assert response.status_code == 413
+    assert response.json()["detail"] == "PDF exceeds 100-page limit"
+
+
+def test_rejects_password_protected_pdf():
+    import fitz
+
+    pdf = fitz.open()
+    pdf.new_page()
+    payload = pdf.tobytes(
+        encryption=fitz.PDF_ENCRYPT_AES_256,
+        owner_pw="owner-password",
+        user_pw="reader-password",
+    )
+    pdf.close()
+
+    response = client.post(
+        "/v1/documents",
+        files={"file": ("locked.pdf", payload, "application/pdf")},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Password-protected PDFs are not supported"
+
+
+def test_rejects_excessive_extracted_pdf_text(monkeypatch):
+    from app import documents
+
+    class FakePage:
+        def get_text(self):
+            return "A" * (documents.MAX_EXTRACTED_CHARACTERS + 1)
+
+    class FakePDF:
+        needs_pass = False
+
+        def __len__(self):
+            return 1
+
+        def __iter__(self):
+            return iter([FakePage()])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    import fitz
+
+    monkeypatch.setattr(fitz, "open", lambda **_kwargs: FakePDF())
+    response = client.post(
+        "/v1/documents",
+        files={"file": ("expanded.pdf", b"%PDF-1.7", "application/pdf")},
+    )
+    assert response.status_code == 413
+    assert response.json()["detail"] == "Extracted PDF text exceeds limit"
