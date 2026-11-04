@@ -20,14 +20,25 @@ def evaluate_requirements(requirements: list[Requirement]) -> EvaluationResult:
     without evidence are missing. A dependency that is not satisfied blocks its dependents.
     """
     by_id = {requirement.id: requirement for requirement in requirements}
-    evaluated: list[Requirement] = []
+    resolved: dict = {}
+    visiting: set = set()
 
-    for requirement in requirements:
+    def resolve(requirement_id):
+        # Resolve the graph rather than trusting stale, caller-supplied statuses.
+        # Missing references and dependency cycles fail closed.
+        if requirement_id not in by_id or requirement_id in visiting:
+            return RequirementStatus.BLOCKED
+        if requirement_id in resolved:
+            return resolved[requirement_id]
+
+        requirement = by_id[requirement_id]
+        visiting.add(requirement_id)
         dependency_blocked = any(
-            dependency not in by_id
-            or by_id[dependency].status not in {RequirementStatus.SATISFIED}
+            resolve(dependency) != RequirementStatus.SATISFIED
             for dependency in requirement.depends_on
         )
+        visiting.remove(requirement_id)
+
         if dependency_blocked:
             status = RequirementStatus.BLOCKED
         elif _has_conflicting_evidence(requirement.evidence):
@@ -36,7 +47,13 @@ def evaluate_requirements(requirements: list[Requirement]) -> EvaluationResult:
             status = RequirementStatus.SATISFIED
         else:
             status = RequirementStatus.MISSING
-        evaluated.append(requirement.model_copy(update={"status": status}))
+        resolved[requirement_id] = status
+        return status
+
+    evaluated = [
+        requirement.model_copy(update={"status": resolve(requirement.id)})
+        for requirement in requirements
+    ]
 
     return EvaluationResult(
         requirements=evaluated,
