@@ -31,11 +31,10 @@ def test_rejection_is_durable_and_cannot_be_overridden():
             action_id, ApprovalStatus.REJECTED,
             reviewer_id="reviewer-2", reason="Missing proof",
         )
-    with pytest.raises(ApprovalGateError):
-        with session_scope(factory) as session:
-            ApprovalRepository(session).decide(
-                action_id, ApprovalStatus.APPROVED, reviewer_id="reviewer-3"
-            )
+    with pytest.raises(ApprovalGateError), session_scope(factory) as session:
+        ApprovalRepository(session).decide(
+            action_id, ApprovalStatus.APPROVED, reviewer_id="reviewer-3"
+        )
     with session_scope(factory) as session:
         decision = ApprovalRepository(session).get(action_id)
         assert decision.status == ApprovalStatus.REJECTED
