@@ -93,3 +93,31 @@ def document_requirement_sources(document_id: UUID) -> list[RequirementSourceRes
             )
             for requirement in extract_requirements(row.id, row.filename, row.text)
         ]
+
+
+class PersistedRequirementsResponse(BaseModel):
+    workspace_id: str
+    requirements: list[Requirement]
+
+
+@router.post("/documents/{document_id}/requirements/persist", response_model=PersistedRequirementsResponse, tags=["requirements"])
+def persist_document_requirements(document_id: UUID) -> PersistedRequirementsResponse:
+    """Persist pending review candidates idempotently; never mark them satisfied."""
+    from uuid import uuid5
+
+    from .domain.models import ApplicationWorkspace
+    from .persistence import WorkspaceRepository, WorkspaceRow
+
+    with session_scope(get_session_factory()) as session:
+        document = DocumentRepository(session).get(document_id)
+        if document is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        workspace_id = uuid5(document_id, "applicationos:requirements-workspace")
+        repository = WorkspaceRepository(session)
+        if session.get(WorkspaceRow, workspace_id) is None:
+            repository.create(ApplicationWorkspace(id=workspace_id, name=document.filename, application_type="document-review"))
+        existing = {item.id for item in repository.list_requirements(workspace_id)}
+        for candidate in extract_requirements(document.id, document.filename, document.text):
+            if candidate.id not in existing:
+                repository.add_requirement(workspace_id, candidate)
+        return PersistedRequirementsResponse(workspace_id=str(workspace_id), requirements=repository.list_requirements(workspace_id))
