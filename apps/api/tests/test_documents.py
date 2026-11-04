@@ -77,3 +77,12 @@ def test_stored_instructions_generate_pending_requirement_candidates():
 def test_missing_document_requirement_candidates_return_404():
     response = client.get("/v1/documents/00000000-0000-0000-0000-000000000001/requirements")
     assert response.status_code == 404
+
+
+def test_rejects_invalid_utf8_without_internal_server_error():
+    response = client.post(
+        "/v1/documents",
+        files={"file": ("invalid.txt", b"\xff\xfe\x80", "text/plain")},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Plain-text document must be valid UTF-8"
