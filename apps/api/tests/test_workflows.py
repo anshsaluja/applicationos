@@ -1,0 +1,65 @@
+from uuid import uuid4
+
+import pytest
+
+from app.domain.approvals import ApprovalDecision, ApprovalStatus
+from app.domain.workflows import (
+    WorkflowState,
+    WorkflowStatus,
+    WorkflowTransitionError,
+    transition,
+)
+
+
+def setup():
+    action_id = uuid4()
+    state = WorkflowState(action_id=action_id, idempotency_key="job:1", max_attempts=2)
+    approved = ApprovalDecision(
+        action_id=action_id, status=ApprovalStatus.APPROVED, reviewer_id="reviewer"
+    )
+    return state, approved
+
+
+def test_requires_approval_before_ready_and_running():
+    state, approved = setup()
+    waiting = transition(state, WorkflowStatus.AWAITING_APPROVAL)
+    with pytest.raises(WorkflowTransitionError, match="approval"):
+        transition(waiting, WorkflowStatus.READY)
+    wrong = approved.model_copy(update={"action_id": uuid4()})
+    with pytest.raises(WorkflowTransitionError, match="approval"):
+        transition(waiting, WorkflowStatus.READY, approval=wrong)
+    ready = transition(waiting, WorkflowStatus.READY, approval=approved)
+    with pytest.raises(WorkflowTransitionError, match="approval"):
+        transition(ready, WorkflowStatus.RUNNING)
+    assert transition(ready, WorkflowStatus.RUNNING, approval=approved).attempt == 1
+
+
+def test_retries_are_bounded_and_terminal_success_cannot_restart():
+    state, approved = setup()
+    state = transition(state, WorkflowStatus.AWAITING_APPROVAL)
+    state = transition(state, WorkflowStatus.READY, approval=approved)
+    for attempt in (1, 2):
+        state = transition(state, WorkflowStatus.RUNNING, approval=approved)
+        assert state.attempt == attempt
+        state = transition(state, WorkflowStatus.FAILED)
+        if attempt == 1:
+            state = transition(state, WorkflowStatus.READY, approval=approved)
+    with pytest.raises(WorkflowTransitionError, match="budget"):
+        transition(state, WorkflowStatus.READY, approval=approved)
+
+
+def test_success_is_terminal_and_duplicate_transition_is_idempotent():
+    state, approved = setup()
+    state = transition(state, WorkflowStatus.AWAITING_APPROVAL)
+    state = transition(state, WorkflowStatus.READY, approval=approved)
+    state = transition(state, WorkflowStatus.RUNNING, approval=approved)
+    state = transition(state, WorkflowStatus.SUCCEEDED)
+    assert transition(state, WorkflowStatus.SUCCEEDED) == state
+    with pytest.raises(WorkflowTransitionError, match="Invalid transition"):
+        transition(state, WorkflowStatus.RUNNING, approval=approved)
+
+
+def test_cannot_skip_approval_gate():
+    state, approved = setup()
+    with pytest.raises(WorkflowTransitionError, match="Invalid transition"):
+        transition(state, WorkflowStatus.RUNNING, approval=approved)
