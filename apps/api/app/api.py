@@ -127,3 +127,17 @@ def persist_document_requirements(document_id: UUID) -> PersistedRequirementsRes
         return PersistedRequirementsResponse(
             workspace_id=str(workspace_id), requirements=repository.list_requirements(workspace_id)
         )
+
+
+@router.get("/workspaces/{workspace_id}/requirements", response_model=PersistedRequirementsResponse, tags=["requirements"])
+def get_persisted_workspace_requirements(workspace_id: UUID) -> PersistedRequirementsResponse:
+    """Read stored requirement state without re-extracting or mutating it."""
+    from .persistence import WorkspaceRepository, WorkspaceRow
+
+    with session_scope(get_session_factory()) as session:
+        if session.get(WorkspaceRow, workspace_id) is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        return PersistedRequirementsResponse(
+            workspace_id=str(workspace_id),
+            requirements=WorkspaceRepository(session).list_requirements(workspace_id),
+        )
