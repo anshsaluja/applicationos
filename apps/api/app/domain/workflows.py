@@ -68,9 +68,12 @@ def transition(
         except ApprovalGateError as exc:
             raise WorkflowTransitionError("Verified approval is required") from exc
 
-    if target == WorkflowStatus.READY and state.status == WorkflowStatus.FAILED:
-        if state.attempt >= state.max_attempts:
-            raise WorkflowTransitionError("Retry budget exhausted")
+    if (
+        target == WorkflowStatus.READY
+        and state.status == WorkflowStatus.FAILED
+        and state.attempt >= state.max_attempts
+    ):
+        raise WorkflowTransitionError("Retry budget exhausted")
 
     if target == WorkflowStatus.RUNNING:
         if state.attempt >= state.max_attempts:
