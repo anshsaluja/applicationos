@@ -29,7 +29,10 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
     if not data:
         raise HTTPException(status_code=422, detail="Document is empty")
     if media_type == "text/plain":
-        text = data.decode("utf-8", errors="strict")
+        try:
+            text = data.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=422, detail="Plain-text document must be valid UTF-8") from exc
     else:
         text = _extract_pdf(data)
     if not text.strip():
