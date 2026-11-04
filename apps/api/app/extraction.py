@@ -6,7 +6,7 @@ Every result retains an exact excerpt and the source document identifier.
 from __future__ import annotations
 
 import re
-from uuid import UUID
+from uuid import UUID, uuid5
 
 from .domain.models import Evidence, Requirement
 
@@ -31,6 +31,7 @@ def extract_requirements(document_id: UUID, filename: str, text: str) -> list[Re
         # Requirement evidence stays empty until actual supporting proof is reviewed.
         results.append(
             Requirement(
+                id=uuid5(document_id, normalized),
                 title=excerpt[:120],
                 description=excerpt,
                 evidence=[],
