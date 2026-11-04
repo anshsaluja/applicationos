@@ -4,9 +4,9 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from .documents import ingest_upload
-from .extraction import extract_requirements
 from .domain.evaluator import evaluate_requirements
 from .domain.models import Requirement
+from .extraction import extract_requirements
 from .persistence import DocumentRepository, build_session_factory, session_scope
 
 router = APIRouter(prefix="/v1")
