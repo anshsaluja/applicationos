@@ -3,7 +3,11 @@ from uuid import uuid4
 import pytest
 
 from app.domain.approvals import (
-    ApprovalDecision, ApprovalGateError, ApprovalStatus, decide, require_approved,
+    ApprovalDecision,
+    ApprovalGateError,
+    ApprovalStatus,
+    decide,
+    require_approved,
 )
 
 
