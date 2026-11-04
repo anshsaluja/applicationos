@@ -157,7 +157,7 @@ class ApprovalRepository:
         )
 
     def decide(self, action_id: UUID, requested, *, reviewer_id: str, reason: str | None = None):
-        from .domain.approvals import ApprovalGateError, ApprovalStatus, decide
+        from .domain.approvals import ApprovalStatus, decide
 
         # Serialize decisions for the same action, including when no row exists yet.
         # A transaction-scoped advisory lock prevents two first-time writers racing.
