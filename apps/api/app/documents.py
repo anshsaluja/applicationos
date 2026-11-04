@@ -7,6 +7,8 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException, UploadFile
 
 MAX_DOCUMENT_BYTES = 8 * 1024 * 1024
+MAX_PDF_PAGES = 100
+MAX_EXTRACTED_CHARACTERS = 1_000_000
 ALLOWED_TYPES = {"application/pdf", "text/plain"}
 
 
@@ -44,6 +46,20 @@ def _extract_pdf(data: bytes) -> str:
     try:
         import fitz
         with fitz.open(stream=data, filetype="pdf") as document:
-            return "\n\n".join(page.get_text() for page in document)
+            if document.needs_pass:
+                raise HTTPException(status_code=422, detail="Password-protected PDFs are not supported")
+            if len(document) > MAX_PDF_PAGES:
+                raise HTTPException(status_code=413, detail="PDF exceeds 100-page limit")
+            parts = []
+            extracted_length = 0
+            for page in document:
+                page_text = page.get_text()
+                extracted_length += len(page_text)
+                if extracted_length > MAX_EXTRACTED_CHARACTERS:
+                    raise HTTPException(status_code=413, detail="Extracted PDF text exceeds limit")
+                parts.append(page_text)
+            return "\n\n".join(parts)
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=422, detail="Unable to parse PDF") from exc
