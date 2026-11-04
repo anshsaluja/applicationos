@@ -115,9 +115,15 @@ def persist_document_requirements(document_id: UUID) -> PersistedRequirementsRes
         workspace_id = uuid5(document_id, "applicationos:requirements-workspace")
         repository = WorkspaceRepository(session)
         if session.get(WorkspaceRow, workspace_id) is None:
-            repository.create(ApplicationWorkspace(id=workspace_id, name=document.filename, application_type="document-review"))
+            repository.create(
+                ApplicationWorkspace(
+                    id=workspace_id, name=document.filename, application_type="document-review"
+                )
+            )
         existing = {item.id for item in repository.list_requirements(workspace_id)}
         for candidate in extract_requirements(document.id, document.filename, document.text):
             if candidate.id not in existing:
                 repository.add_requirement(workspace_id, candidate)
-        return PersistedRequirementsResponse(workspace_id=str(workspace_id), requirements=repository.list_requirements(workspace_id))
+        return PersistedRequirementsResponse(
+            workspace_id=str(workspace_id), requirements=repository.list_requirements(workspace_id)
+        )
