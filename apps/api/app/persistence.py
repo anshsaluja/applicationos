@@ -179,3 +179,99 @@ class ApprovalRepository:
             )
             self.session.flush()
         return updated
+
+
+class WorkflowRow(Base):
+    """Durable workflow checkpoint; the idempotency key is globally unique."""
+    __tablename__ = "workflow_checkpoints"
+    action_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    attempt: Mapped[int] = mapped_column(nullable=False)
+    max_attempts: Mapped[int] = mapped_column(nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class WorkflowRepository:
+    """Atomic, locked workflow transitions with approval rechecks.
+
+    No external side effects are dispatched here. A durable outbox/worker is
+    required before executing any approved action.
+    """
+
+    def __init__(self, session):
+        self.session = session
+
+    @staticmethod
+    def _state(row):
+        from .domain.workflows import WorkflowState
+
+        return WorkflowState(
+            action_id=row.action_id,
+            idempotency_key=row.idempotency_key,
+            status=row.status,
+            attempt=row.attempt,
+            max_attempts=row.max_attempts,
+            last_error=row.last_error,
+        )
+
+    def create(self, state):
+        from sqlalchemy.exc import IntegrityError
+
+        from .domain.workflows import WorkflowStatus, WorkflowTransitionError
+
+        if state.status != WorkflowStatus.PENDING or state.attempt != 0:
+            raise WorkflowTransitionError("Only a fresh pending workflow may be created")
+        # Lock the action identifier before checking uniqueness.
+        from sqlalchemy import text
+
+        lock_key = int.from_bytes(state.action_id.bytes[:8], "big", signed=True)
+        self.session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+        existing = self.session.get(WorkflowRow, state.action_id)
+        if existing is not None:
+            if existing.idempotency_key != state.idempotency_key:
+                raise WorkflowTransitionError("Action already has a different idempotency key")
+            return self._state(existing)
+        row = WorkflowRow(
+            action_id=state.action_id,
+            idempotency_key=state.idempotency_key,
+            status=state.status.value,
+            attempt=state.attempt,
+            max_attempts=state.max_attempts,
+            last_error=state.last_error,
+        )
+        try:
+            with self.session.begin_nested():
+                self.session.add(row)
+                self.session.flush()
+        except IntegrityError as exc:
+            raise WorkflowTransitionError("Idempotency key already belongs to another action") from exc
+        return self._state(row)
+
+    def get(self, action_id: UUID):
+        row = self.session.get(WorkflowRow, action_id)
+        return None if row is None else self._state(row)
+
+    def advance(self, action_id: UUID, target, *, error: str | None = None):
+        from .domain.workflows import WorkflowStatus, WorkflowTransitionError, transition
+
+        row = (
+            self.session.query(WorkflowRow)
+            .filter_by(action_id=action_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        if row is None:
+            raise WorkflowTransitionError("Workflow not found")
+        current = self._state(row)
+        # Recheck the durable approval under the transaction, never trust
+        # a caller-supplied approval object.
+        approval = ApprovalRepository(self.session).get(action_id)
+        updated = transition(current, WorkflowStatus(target), approval=approval)
+        if target == WorkflowStatus.FAILED and error is not None:
+            updated = updated.model_copy(update={"last_error": error[:2000]})
+        row.status = updated.status.value
+        row.attempt = updated.attempt
+        row.last_error = updated.last_error
+        self.session.flush()
+        return updated
