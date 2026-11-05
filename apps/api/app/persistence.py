@@ -231,6 +231,8 @@ class WorkflowRepository:
         if existing is not None:
             if existing.idempotency_key != state.idempotency_key:
                 raise WorkflowTransitionError("Action already has a different idempotency key")
+            if existing.max_attempts != state.max_attempts:
+                raise WorkflowTransitionError("Idempotent workflow creation cannot change retry policy")
             return self._state(existing)
         row = WorkflowRow(
             action_id=state.action_id,
