@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .documents import ingest_upload
 from .domain.evaluator import evaluate_requirements
@@ -166,8 +166,8 @@ def get_workflow_checkpoint(action_id: UUID) -> WorkflowCheckpointResponse:
 
 class WorkflowCreateRequest(BaseModel):
     action_id: UUID
-    idempotency_key: str
-    max_attempts: int = 3
+    idempotency_key: str = Field(min_length=1, max_length=200)
+    max_attempts: int = Field(default=3, ge=1, le=10)
 
 
 @router.post("/workflows", response_model=WorkflowCheckpointResponse, tags=["workflows"])
