@@ -162,3 +162,30 @@ def get_workflow_checkpoint(action_id: UUID) -> WorkflowCheckpointResponse:
         if state is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
         return WorkflowCheckpointResponse(**state.model_dump())
+
+
+class WorkflowCreateRequest(BaseModel):
+    action_id: UUID
+    idempotency_key: str
+    max_attempts: int = 3
+
+
+@router.post("/workflows", response_model=WorkflowCheckpointResponse, tags=["workflows"])
+def create_workflow_checkpoint(payload: WorkflowCreateRequest) -> WorkflowCheckpointResponse:
+    """Record pending intent only. Never approve or dispatch external actions."""
+    from fastapi import HTTPException
+
+    from .domain.workflows import WorkflowState, WorkflowTransitionError
+    from .persistence import WorkflowRepository
+
+    try:
+        state = WorkflowState(
+            action_id=payload.action_id,
+            idempotency_key=payload.idempotency_key,
+            max_attempts=payload.max_attempts,
+        )
+        with session_scope(get_session_factory()) as session:
+            saved = WorkflowRepository(session).create(state)
+            return WorkflowCheckpointResponse(**saved.model_dump())
+    except WorkflowTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
