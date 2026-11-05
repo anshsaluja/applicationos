@@ -5,7 +5,12 @@ import pytest
 
 from app.domain.approvals import ApprovalStatus
 from app.domain.workflows import WorkflowState, WorkflowStatus, WorkflowTransitionError
-from app.persistence import ApprovalRepository, WorkflowRepository, build_session_factory, session_scope
+from app.persistence import (
+    ApprovalRepository,
+    WorkflowRepository,
+    build_session_factory,
+    session_scope,
+)
 
 
 def test_checkpoint_survives_sessions_and_requires_persisted_approval():
@@ -46,9 +51,10 @@ def test_idempotency_key_cannot_be_reused_by_another_action():
     key = f"unique:{uuid4()}"
     with session_scope(factory) as session:
         WorkflowRepository(session).create(WorkflowState(action_id=uuid4(), idempotency_key=key))
-    with session_scope(factory) as session:
-        with pytest.raises(WorkflowTransitionError, match="Idempotency key"):
-            WorkflowRepository(session).create(WorkflowState(action_id=uuid4(), idempotency_key=key))
+    with session_scope(factory) as session, pytest.raises(
+        WorkflowTransitionError, match="Idempotency key"
+    ):
+        WorkflowRepository(session).create(WorkflowState(action_id=uuid4(), idempotency_key=key))
 
 
 def test_retry_checkpoint_retains_error_and_attempt_count():
