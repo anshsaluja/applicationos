@@ -4,6 +4,7 @@ import { useState } from "react";
 
 type Requirement = { id: string; title: string; description: string; status: string; evidence: unknown[] };
 type Result = { workspace_id: string; requirements: Requirement[] };
+type WorkflowCheckpoint = { action_id: string; status: string; attempt: number; max_attempts: number; idempotency_key: string; last_error: string | null };
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function responseJson<T>(response: Response): Promise<T> {
@@ -20,6 +21,10 @@ export default function Home() {
   const [result, setResult] = useState<Result | null>(null);
   const [documentId, setDocumentId] = useState("");
   const [workspaceLookup, setWorkspaceLookup] = useState("");
+  const [workflowId, setWorkflowId] = useState("");
+  const [workflow, setWorkflow] = useState<WorkflowCheckpoint | null>(null);
+  const [workflowError, setWorkflowError] = useState("");
+  const [workflowBusy, setWorkflowBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -56,6 +61,22 @@ export default function Home() {
     } finally { setBusy(false); }
   }
 
+  async function loadWorkflow(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const id = workflowId.trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      setWorkflow(null); setWorkflowError("Enter a valid action UUID."); return;
+    }
+    if (workflowBusy) return;
+    setWorkflowBusy(true); setWorkflowError(""); setWorkflow(null);
+    try {
+      const saved = await responseJson<WorkflowCheckpoint>(await fetch(`${API}/v1/workflows/${encodeURIComponent(id)}`, { cache: "no-store" }));
+      setWorkflow(saved);
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "Unable to load workflow");
+    } finally { setWorkflowBusy(false); }
+  }
+
   return (
     <main style={{ maxWidth: 850, margin: "4rem auto", padding: "0 1.5rem", fontFamily: "system-ui", lineHeight: 1.6 }}>
       <h1>ApplicationOS</h1>
@@ -74,6 +95,24 @@ export default function Home() {
           <button type="submit" disabled={busy || !workspaceLookup.trim()}>Load saved requirements</button>
         </div>
       </form>
+      <section style={{ marginTop: "2rem", borderTop: "1px solid #ddd", paddingTop: "1rem" }}>
+        <h2>Workflow checkpoint</h2>
+        <p>Inspect durable workflow state by action ID. This read-only view cannot approve or execute actions.</p>
+        <form onSubmit={loadWorkflow}>
+          <label htmlFor="workflow-id">Action UUID</label>
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+            <input id="workflow-id" value={workflowId} onChange={(e) => setWorkflowId(e.target.value)} placeholder="Action UUID" style={{ flex: 1, minWidth: 0 }} />
+            <button type="submit" disabled={workflowBusy || !workflowId.trim()}>{workflowBusy ? "Loading…" : "Check status"}</button>
+          </div>
+        </form>
+        {workflowError && <p role="alert" style={{ color: "crimson" }}>{workflowError}</p>}
+        {workflow && <div aria-live="polite">
+          <p><strong>Status:</strong> {workflow.status.replaceAll("_", " ")}</p>
+          <p><strong>Attempts:</strong> {workflow.attempt} / {workflow.max_attempts}</p>
+          <p><strong>Idempotency key:</strong> <code style={{ overflowWrap: "anywhere" }}>{workflow.idempotency_key}</code></p>
+          {workflow.last_error && <p><strong>Last error:</strong> {workflow.last_error}</p>}
+        </div>}
+      </section>
       {error && <p role="alert" style={{ color: "crimson" }}>{error}</p>}
       {result && (
         <section aria-live="polite">
