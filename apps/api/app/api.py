@@ -141,3 +141,24 @@ def get_persisted_workspace_requirements(workspace_id: UUID) -> PersistedRequire
             workspace_id=str(workspace_id),
             requirements=WorkspaceRepository(session).list_requirements(workspace_id),
         )
+
+
+class WorkflowCheckpointResponse(BaseModel):
+    action_id: UUID
+    idempotency_key: str
+    status: str
+    attempt: int
+    max_attempts: int
+    last_error: str | None
+
+
+@router.get("/workflows/{action_id}", response_model=WorkflowCheckpointResponse, tags=["workflows"])
+def get_workflow_checkpoint(action_id: UUID) -> WorkflowCheckpointResponse:
+    """Read durable workflow progress; this endpoint cannot execute actions."""
+    from .persistence import WorkflowRepository
+
+    with session_scope(get_session_factory()) as session:
+        state = WorkflowRepository(session).get(action_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        return WorkflowCheckpointResponse(**state.model_dump())
