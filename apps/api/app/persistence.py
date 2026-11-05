@@ -275,3 +275,33 @@ class WorkflowRepository:
         row.last_error = updated.last_error
         self.session.flush()
         return updated
+
+    def recover_interrupted(self, action_id: UUID, *, reason: str = "Worker interrupted"):
+        """Mark an interrupted RUNNING attempt as failed without replaying effects.
+
+        Call only after the owning worker is known to have stopped. This method
+        deliberately does not redispatch work: a future outbox/worker must
+        reconcile potentially completed external side effects first.
+        """
+        from .domain.workflows import WorkflowStatus, WorkflowTransitionError, transition
+
+        if not reason.strip():
+            raise WorkflowTransitionError("Recovery reason must not be empty")
+        row = (
+            self.session.query(WorkflowRow)
+            .filter_by(action_id=action_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        if row is None:
+            raise WorkflowTransitionError("Workflow not found")
+        current = self._state(row)
+        if current.status == WorkflowStatus.FAILED:
+            return current  # Repeated recovery requests must not consume retries.
+        if current.status != WorkflowStatus.RUNNING:
+            raise WorkflowTransitionError("Only running workflows can be recovered")
+        updated = transition(current, WorkflowStatus.FAILED)
+        row.status = updated.status.value
+        row.last_error = reason[:2000]
+        self.session.flush()
+        return self._state(row)
