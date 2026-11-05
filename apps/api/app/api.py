@@ -213,3 +213,51 @@ def request_workflow_review(action_id: UUID) -> WorkflowCheckpointResponse:
             return WorkflowCheckpointResponse(**updated.model_dump())
     except WorkflowTransitionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+class WorkflowDecisionRequest(BaseModel):
+    decision: str
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+@router.post("/workflows/{action_id}/decision", response_model=WorkflowCheckpointResponse, tags=["workflows"])
+def decide_workflow_review(
+    action_id: UUID,
+    payload: WorkflowDecisionRequest,
+    x_review_token: str | None = __import__("fastapi").Header(default=None),
+) -> WorkflowCheckpointResponse:
+    """Local operator approval gate. Disabled unless explicit credentials are configured.
+
+    This is intentionally a single-operator boundary, not multi-user authentication.
+    Never expose it publicly without proper identity, RBAC, and audit logging.
+    """
+    import hmac
+    import os
+
+    from .domain.approvals import ApprovalGateError, ApprovalStatus
+    from .domain.workflows import WorkflowStatus, WorkflowTransitionError
+    from .persistence import ApprovalRepository, WorkflowRepository
+
+    expected = os.getenv("APPLICATIONOS_REVIEW_TOKEN", "")
+    reviewer = os.getenv("APPLICATIONOS_REVIEWER_ID", "").strip()
+    if not expected or not reviewer or not x_review_token or not hmac.compare_digest(x_review_token, expected):
+        raise HTTPException(status_code=403, detail="Review authorization unavailable or denied")
+    if payload.decision not in {"approved", "rejected"}:
+        raise HTTPException(status_code=422, detail="Decision must be approved or rejected")
+    try:
+        with session_scope(get_session_factory()) as session:
+            workflow = WorkflowRepository(session)
+            state = workflow.get(action_id)
+            if state is None:
+                raise HTTPException(status_code=404, detail="Workflow not found")
+            if state.status != WorkflowStatus.AWAITING_APPROVAL:
+                raise HTTPException(status_code=409, detail="Workflow is not awaiting approval")
+            ApprovalRepository(session).decide(
+                action_id, ApprovalStatus(payload.decision),
+                reviewer_id=reviewer, reason=payload.reason,
+            )
+            target = WorkflowStatus.READY if payload.decision == "approved" else WorkflowStatus.FAILED
+            updated = workflow.advance(action_id, target)
+            return WorkflowCheckpointResponse(**updated.model_dump())
+    except (ApprovalGateError, WorkflowTransitionError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
