@@ -11,7 +11,7 @@ test("workflow inspector validates IDs without calling the API", async ({ page }
   await page.goto("/");
   await page.getByLabel("Action UUID").fill("not-a-uuid");
   await page.getByRole("button", { name: "Check status" }).click();
-  await expect(page.getByRole("alert")).toContainText("Enter a valid action UUID.");
+  await expect(page.locator('p[role="alert"]')).toContainText("Enter a valid action UUID.");
   expect(calls).toBe(0);
 });
 
@@ -39,7 +39,7 @@ test("workflow inspector displays persisted checkpoint and clears stale results"
 
   await page.getByLabel("Action UUID").fill("bad");
   await page.getByRole("button", { name: "Check status" }).click();
-  await expect(page.getByRole("alert")).toContainText("Enter a valid action UUID.");
+  await expect(page.locator('p[role="alert"]')).toContainText("Enter a valid action UUID.");
   await expect(page.getByText("awaiting approval")).toHaveCount(0);
 });
 
@@ -54,6 +54,6 @@ test("workflow inspector handles missing checkpoints without stale data", async 
   await page.goto("/");
   await page.getByLabel("Action UUID").fill(ACTION_ID);
   await page.getByRole("button", { name: "Check status" }).click();
-  await expect(page.getByRole("alert")).toContainText("Workflow not found");
+  await expect(page.locator('p[role="alert"]')).toContainText("Workflow not found");
   await expect(page.getByText("Attempts:")).toHaveCount(0);
 });
