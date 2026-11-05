@@ -189,3 +189,27 @@ def create_workflow_checkpoint(payload: WorkflowCreateRequest) -> WorkflowCheckp
             return WorkflowCheckpointResponse(**saved.model_dump())
     except WorkflowTransitionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/workflows/{action_id}/request-review", response_model=WorkflowCheckpointResponse, tags=["workflows"])
+def request_workflow_review(action_id: UUID) -> WorkflowCheckpointResponse:
+    """Move a pending workflow into review; never approve or execute it.
+
+    Duplicate requests are idempotent. All other states fail closed so that
+    callers cannot use this endpoint to reset a decision or retry budget.
+    """
+    from .domain.workflows import WorkflowStatus, WorkflowTransitionError
+    from .persistence import WorkflowRepository
+
+    try:
+        with session_scope(get_session_factory()) as session:
+            repository = WorkflowRepository(session)
+            state = repository.get(action_id)
+            if state is None:
+                raise HTTPException(status_code=404, detail="Workflow not found")
+            if state.status not in {WorkflowStatus.PENDING, WorkflowStatus.AWAITING_APPROVAL}:
+                raise HTTPException(status_code=409, detail="Workflow is no longer eligible for review")
+            updated = repository.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+            return WorkflowCheckpointResponse(**updated.model_dump())
+    except WorkflowTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
