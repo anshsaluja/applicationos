@@ -113,3 +113,19 @@ def test_recovery_rejects_non_running_workflows_and_empty_reason():
             repo.recover_interrupted(action_id, reason="  ")
         with pytest.raises(WorkflowTransitionError, match="not found"):
             repo.recover_interrupted(uuid4())
+
+
+def test_idempotent_create_rejects_conflicting_retry_policy():
+    factory = build_session_factory()
+    action_id = uuid4()
+    key = f"policy:{action_id}"
+    with session_scope(factory) as session:
+        repo = WorkflowRepository(session)
+        original = WorkflowState(action_id=action_id, idempotency_key=key, max_attempts=3)
+        assert repo.create(original) == original
+        with pytest.raises(WorkflowTransitionError, match="retry policy"):
+            repo.create(WorkflowState(action_id=action_id, idempotency_key=key, max_attempts=1))
+        assert repo.get(action_id) == original
+
+    with session_scope(factory) as session:
+        assert WorkflowRepository(session).get(action_id).max_attempts == 3
