@@ -25,6 +25,8 @@ export default function Home() {
   const [workflow, setWorkflow] = useState<WorkflowCheckpoint | null>(null);
   const [workflowError, setWorkflowError] = useState("");
   const [workflowBusy, setWorkflowBusy] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState("");
+  const [workflowNotice, setWorkflowNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -77,6 +79,33 @@ export default function Home() {
     } finally { setWorkflowBusy(false); }
   }
 
+  async function mutateWorkflow(operation: "create" | "request-review") {
+    if (workflowBusy) return;
+    const id = workflowId.trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      setWorkflowError("Enter a valid action UUID."); return;
+    }
+    if (operation === "create" && (!idempotencyKey.trim() || idempotencyKey.length > 200)) {
+      setWorkflowError("Enter an idempotency key (1–200 characters)."); return;
+    }
+    setWorkflowBusy(true); setWorkflowError(""); setWorkflowNotice("");
+    try {
+      const url = operation === "create" ? `${API}/v1/workflows` : `${API}/v1/workflows/${encodeURIComponent(id)}/request-review`;
+      const response = await fetch(url, {
+        method: "POST",
+        ...(operation === "create" ? {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action_id: id, idempotency_key: idempotencyKey.trim(), max_attempts: 3 }),
+        } : {}),
+      });
+      const updated = await responseJson<WorkflowCheckpoint>(response);
+      setWorkflow(updated);
+      setWorkflowNotice(operation === "create" ? "Workflow checkpoint saved. No action has been executed." : "Review requested. An authorized operator must decide before execution.");
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "Unable to update workflow");
+    } finally { setWorkflowBusy(false); }
+  }
+
   return (
     <main style={{ maxWidth: 850, margin: "4rem auto", padding: "0 1.5rem", fontFamily: "system-ui", lineHeight: 1.6 }}>
       <h1>ApplicationOS</h1>
@@ -105,6 +134,16 @@ export default function Home() {
             <button type="submit" disabled={workflowBusy || !workflowId.trim()}>{workflowBusy ? "Loading…" : "Check status"}</button>
           </div>
         </form>
+        <div style={{ marginTop: "1rem", display: "grid", gap: "0.5rem" }}>
+          <label htmlFor="idempotency-key">Idempotency key for new workflow</label>
+          <input id="idempotency-key" maxLength={200} value={idempotencyKey} onChange={(e) => setIdempotencyKey(e.target.value)} placeholder="Unique request key" />
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button type="button" disabled={workflowBusy || !workflowId.trim() || !idempotencyKey.trim()} onClick={() => void mutateWorkflow("create")}>Create checkpoint</button>
+            <button type="button" disabled={workflowBusy || workflow?.status !== "pending" || workflow.action_id !== workflowId.trim()} onClick={() => void mutateWorkflow("request-review")}>Request human review</button>
+          </div>
+          <small>Creation records intent only. Review requests never grant approval or execute external actions.</small>
+        </div>
+        {workflowNotice && <p role="status">{workflowNotice}</p>}
         {workflowError && <p role="alert" style={{ color: "crimson" }}>{workflowError}</p>}
         {workflow && <div aria-live="polite">
           <p><strong>Status:</strong> {workflow.status.replaceAll("_", " ")}</p>
