@@ -63,3 +63,16 @@ def test_cannot_skip_approval_gate():
     state, approved = setup()
     with pytest.raises(WorkflowTransitionError, match="Invalid transition"):
         transition(state, WorkflowStatus.RUNNING, approval=approved)
+
+
+def test_idempotent_executable_transitions_still_require_durable_approval():
+    state, approved = setup()
+    waiting = transition(state, WorkflowStatus.AWAITING_APPROVAL)
+    ready = transition(waiting, WorkflowStatus.READY, approval=approved)
+    with pytest.raises(WorkflowTransitionError, match="approval"):
+        transition(ready, WorkflowStatus.READY)
+    assert transition(ready, WorkflowStatus.READY, approval=approved) == ready
+    running = transition(ready, WorkflowStatus.RUNNING, approval=approved)
+    with pytest.raises(WorkflowTransitionError, match="approval"):
+        transition(running, WorkflowStatus.RUNNING)
+    assert transition(running, WorkflowStatus.RUNNING, approval=approved) == running
