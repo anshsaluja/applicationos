@@ -8,6 +8,7 @@ from app.domain.workflows import (
     WorkflowStatus,
     WorkflowTransitionError,
     transition,
+    require_dispatch_authorization,
 )
 
 
@@ -76,3 +77,35 @@ def test_idempotent_executable_transitions_still_require_durable_approval():
     with pytest.raises(WorkflowTransitionError, match="approval"):
         transition(running, WorkflowStatus.RUNNING)
     assert transition(running, WorkflowStatus.RUNNING, approval=approved) == running
+
+
+def test_dispatch_guard_requires_running_state_and_current_approval():
+    state, approved = setup()
+    with pytest.raises(WorkflowTransitionError, match="running"):
+        require_dispatch_authorization(state, approval=approved)
+    waiting = transition(state, WorkflowStatus.AWAITING_APPROVAL)
+    ready = transition(waiting, WorkflowStatus.READY, approval=approved)
+    with pytest.raises(WorkflowTransitionError, match="running"):
+        require_dispatch_authorization(ready, approval=approved)
+    running = transition(ready, WorkflowStatus.RUNNING, approval=approved)
+    with pytest.raises(WorkflowTransitionError, match="approval"):
+        require_dispatch_authorization(running)
+    with pytest.raises(WorkflowTransitionError, match="approval"):
+        require_dispatch_authorization(running, approval=approved.model_copy(update={"action_id": uuid4()}))
+    rejected = approved.model_copy(update={"status": ApprovalStatus.REJECTED})
+    with pytest.raises(WorkflowTransitionError, match="approval"):
+        require_dispatch_authorization(running, approval=rejected)
+    require_dispatch_authorization(running, approval=approved)
+    succeeded = transition(running, WorkflowStatus.SUCCEEDED)
+    with pytest.raises(WorkflowTransitionError, match="running"):
+        require_dispatch_authorization(succeeded, approval=approved)
+
+
+def test_dispatch_guard_rejects_invalid_attempt_state():
+    state, approved = setup()
+    invalid = state.model_copy(update={"status": WorkflowStatus.RUNNING, "attempt": 0})
+    with pytest.raises(WorkflowTransitionError, match="attempt"):
+        require_dispatch_authorization(invalid, approval=approved)
+    invalid = state.model_copy(update={"status": WorkflowStatus.RUNNING, "attempt": 3})
+    with pytest.raises(WorkflowTransitionError, match="attempt"):
+        require_dispatch_authorization(invalid, approval=approved)
