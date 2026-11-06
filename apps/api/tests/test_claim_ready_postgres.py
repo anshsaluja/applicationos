@@ -126,3 +126,18 @@ def test_batch_claim_skips_locked_rows_and_claims_distinct_work(factory):
         repo = WorkflowRepository(session)
         assert repo.get(ordered[0]).status == WorkflowStatus.RUNNING
         assert repo.get(ordered[1]).status == WorkflowStatus.RUNNING
+
+
+def test_batch_claim_ignores_unapproved_actions(factory):
+    """The batch worker must not claim actions awaiting human approval."""
+    pending = new_workflow(factory, approve=False)
+    approved = new_workflow(factory, approve=True)
+    with factory.begin() as session:
+        claimed = WorkflowRepository(session).claim_next_ready()
+        assert claimed is not None
+        assert claimed.action_id == approved
+        assert claimed.status == WorkflowStatus.RUNNING
+    with factory.begin() as session:
+        repo = WorkflowRepository(session)
+        assert repo.get(pending).status == WorkflowStatus.AWAITING_APPROVAL
+        assert repo.get(approved).attempt == 1
