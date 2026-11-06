@@ -7,9 +7,14 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.persistence import ApprovalRepository, WorkflowRepository, build_session_factory, session_scope
 from app.domain.workflows import WorkflowStatus
+from app.main import app
+from app.persistence import (
+    ApprovalRepository,
+    WorkflowRepository,
+    build_session_factory,
+    session_scope,
+)
 
 
 def test_approved_checkpoint_survives_restart_and_recovery(monkeypatch):
