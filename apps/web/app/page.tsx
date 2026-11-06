@@ -27,6 +27,9 @@ export default function Home() {
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [workflowNotice, setWorkflowNotice] = useState("");
+  const [reviewToken, setReviewToken] = useState("");
+  const [reviewDecision, setReviewDecision] = useState<"approved" | "rejected">("approved");
+  const [reviewReason, setReviewReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -106,6 +109,35 @@ export default function Home() {
     } finally { setWorkflowBusy(false); }
   }
 
+  async function submitReview(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (workflowBusy || workflow?.status !== "awaiting_approval" || workflow.action_id !== workflowId.trim()) return;
+    if (!reviewToken.trim()) { setWorkflowError("Enter the locally configured operator token."); return; }
+    if (reviewDecision === "rejected" && !reviewReason.trim()) { setWorkflowError("A rejection reason is required."); return; }
+    setWorkflowBusy(true); setWorkflowError(""); setWorkflowNotice("");
+    try {
+      const updated = await responseJson<WorkflowCheckpoint>(await fetch(
+        `${API}/v1/workflows/${encodeURIComponent(workflow.action_id)}/decision`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-review-token": reviewToken },
+          body: JSON.stringify({ decision: reviewDecision, reason: reviewReason.trim() || null }),
+          cache: "no-store",
+        }
+      ));
+      setWorkflow(updated);
+      setWorkflowNotice(reviewDecision === "approved"
+        ? "Approved and ready. No external action has been executed."
+        : "Rejected. Workflow execution remains blocked.");
+      setReviewReason("");
+    } catch (err) {
+      setWorkflowError(err instanceof Error ? err.message : "Review decision failed");
+    } finally {
+      setReviewToken("");
+      setWorkflowBusy(false);
+    }
+  }
+
   return (
     <main style={{ maxWidth: 850, margin: "4rem auto", padding: "0 1.5rem", fontFamily: "system-ui", lineHeight: 1.6 }}>
       <h1>ApplicationOS</h1>
@@ -143,6 +175,22 @@ export default function Home() {
           </div>
           <small>Creation records intent only. Review requests never grant approval or execute external actions.</small>
         </div>
+        {workflow?.status === "awaiting_approval" && workflow.action_id === workflowId.trim() && (
+          <form onSubmit={submitReview} style={{ marginTop: "1.5rem", padding: "1rem", border: "1px solid #b9c3d0", borderRadius: 12, background: "#f7f9fc" }}>
+            <h3>Operator review</h3>
+            <p>Local-only approval gate. Never enter a production secret in this browser demo. The token is cleared after each attempt and is not persisted.</p>
+            <label htmlFor="review-token">Operator token (local development only)</label>
+            <input id="review-token" type="password" autoComplete="off" value={reviewToken} onChange={(e) => setReviewToken(e.target.value)} required style={{ display: "block", width: "100%", boxSizing: "border-box", margin: "0.5rem 0 1rem" }} />
+            <label htmlFor="review-decision">Decision</label>
+            <select id="review-decision" value={reviewDecision} onChange={(e) => setReviewDecision(e.target.value as "approved" | "rejected")} style={{ display: "block", margin: "0.5rem 0 1rem" }}>
+              <option value="approved">Approve for execution</option>
+              <option value="rejected">Reject</option>
+            </select>
+            <label htmlFor="review-reason">Reason {reviewDecision === "rejected" ? "(required)" : "(optional)"}</label>
+            <textarea id="review-reason" maxLength={2000} required={reviewDecision === "rejected"} value={reviewReason} onChange={(e) => setReviewReason(e.target.value)} style={{ display: "block", width: "100%", boxSizing: "border-box", margin: "0.5rem 0 1rem" }} />
+            <button type="submit" disabled={workflowBusy || !reviewToken.trim() || (reviewDecision === "rejected" && !reviewReason.trim())}>{workflowBusy ? "Saving decision…" : "Record decision"}</button>
+          </form>
+        )}
         {workflowNotice && <p role="status">{workflowNotice}</p>}
         {workflowError && <p role="alert" style={{ color: "crimson" }}>{workflowError}</p>}
         {workflow && <div aria-live="polite">
