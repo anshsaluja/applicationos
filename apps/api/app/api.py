@@ -152,6 +152,21 @@ class WorkflowCheckpointResponse(BaseModel):
     last_error: str | None
 
 
+@router.get("/workflows", response_model=list[WorkflowCheckpointResponse], tags=["workflows"])
+def list_workflow_checkpoints(limit: int = __import__("fastapi").Query(default=50, ge=1, le=100), offset: int = __import__("fastapi").Query(default=0, ge=0, le=10000)) -> list[WorkflowCheckpointResponse]:
+    """Bounded read-only checkpoint inspection for local development.
+
+    This endpoint is not tenant-isolated; require authentication before hosting.
+    """
+    from .persistence import WorkflowRepository
+
+    with session_scope(get_session_factory()) as session:
+        return [
+            WorkflowCheckpointResponse(**state.model_dump())
+            for state in WorkflowRepository(session).list_recent(limit=limit, offset=offset)
+        ]
+
+
 @router.get("/workflows/{action_id}", response_model=WorkflowCheckpointResponse, tags=["workflows"])
 def get_workflow_checkpoint(action_id: UUID) -> WorkflowCheckpointResponse:
     """Read durable workflow progress; this endpoint cannot execute actions."""
