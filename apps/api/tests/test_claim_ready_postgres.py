@@ -82,3 +82,45 @@ def test_retry_budget_and_recovery_are_durable(factory):
         assert repo.recover_interrupted(action_id).attempt == 1
         with pytest.raises(WorkflowTransitionError, match="Retry budget exhausted"):
             repo.advance(action_id, WorkflowStatus.READY)
+
+
+def test_batch_claim_skips_locked_rows_and_claims_distinct_work(factory):
+    """A busy worker must not prevent another worker claiming a different action."""
+    from threading import Event
+
+    first = new_workflow(factory)
+    second = new_workflow(factory)
+    ordered = sorted((first, second))
+    locked = Event()
+    release = Event()
+
+    def hold_first_row_lock():
+        with factory.begin() as session:
+            from app.persistence import WorkflowRow
+
+            session.query(WorkflowRow).filter_by(action_id=ordered[0]).with_for_update().one()
+            locked.set()
+            assert release.wait(timeout=10), "Timed out waiting to release row lock"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        holder = pool.submit(hold_first_row_lock)
+        try:
+            assert locked.wait(timeout=10), "Timed out acquiring row lock"
+            with factory.begin() as session:
+                claimed = WorkflowRepository(session).claim_next_ready()
+                assert claimed is not None
+                assert claimed.action_id == ordered[1]
+                assert claimed.status == WorkflowStatus.RUNNING
+                assert claimed.attempt == 1
+        finally:
+            release.set()
+            holder.result(timeout=10)
+
+    with factory.begin() as session:
+        claimed = WorkflowRepository(session).claim_next_ready()
+        assert claimed is not None
+        assert claimed.action_id == ordered[0]
+        assert claimed.attempt == 1
+
+    with factory.begin() as session:
+        assert WorkflowRepository(session).claim_next_ready() is None
