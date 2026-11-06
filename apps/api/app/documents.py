@@ -30,6 +30,8 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
         raise HTTPException(status_code=413, detail="Document exceeds 8 MiB limit")
     if not data:
         raise HTTPException(status_code=422, detail="Document is empty")
+    if media_type == "application/pdf" and not data.startswith(b"%PDF-"):
+        raise HTTPException(status_code=422, detail="Invalid PDF signature")
     if media_type == "text/plain":
         try:
             text = data.decode("utf-8", errors="strict")
@@ -37,9 +39,11 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
             raise HTTPException(status_code=422, detail="Plain-text document must be valid UTF-8") from exc
     else:
         text = _extract_pdf(data)
+    if len(text) > MAX_EXTRACTED_CHARACTERS:
+        raise HTTPException(status_code=413, detail="Extracted document text exceeds limit")
     if not text.strip():
         raise HTTPException(status_code=422, detail="No extractable text found")
-    return IngestedDocument(id=uuid4(), filename=upload.filename or "document", media_type=media_type, sha256=hashlib.sha256(data).hexdigest(), text=text.strip())
+    return IngestedDocument(id=uuid4(), filename=_safe_filename(upload.filename), media_type=media_type, sha256=hashlib.sha256(data).hexdigest(), text=text.strip())
 
 
 def _extract_pdf(data: bytes) -> str:
@@ -63,3 +67,10 @@ def _extract_pdf(data: bytes) -> str:
         raise
     except Exception as exc:
         raise HTTPException(status_code=422, detail="Unable to parse PDF") from exc
+
+
+def _safe_filename(filename: str | None) -> str:
+    """Store a display-only basename, never a client-supplied path or control characters."""
+    basename = (filename or "document").replace("\\", "/").split("/")[-1]
+    basename = "".join(ch for ch in basename if ch.isprintable() and ch not in "/\\").strip()
+    return basename[:240] or "document"
