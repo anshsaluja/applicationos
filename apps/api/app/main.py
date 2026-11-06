@@ -1,6 +1,7 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api import router
@@ -30,3 +31,13 @@ app.include_router(router)
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.middleware("http")
+async def harden_api_responses(request: Request, call_next) -> Response:
+    """Prevent caching sensitive documents and workflow state in shared caches."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    if request.url.path.startswith("/v1/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
