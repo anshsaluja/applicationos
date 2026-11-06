@@ -88,3 +88,22 @@ def transition(
         return state.model_copy(update={"status": target, "attempt": state.attempt + 1, "last_error": None})
 
     return state.model_copy(update={"status": target})
+
+
+def require_dispatch_authorization(
+    state: WorkflowState, *, approval: ApprovalDecision | None = None
+) -> None:
+    """Fail closed immediately before dispatching a consequential action.
+
+    Callers must load the current durable approval and workflow state inside
+    the same transaction used to claim the idempotency key. This pure guard
+    alone does not provide atomicity or prevent duplicate external effects.
+    """
+    if state.status != WorkflowStatus.RUNNING:
+        raise WorkflowTransitionError("Workflow must be running before dispatch")
+    if not 1 <= state.attempt <= state.max_attempts:
+        raise WorkflowTransitionError("Invalid execution attempt")
+    try:
+        require_approved(approval, state.action_id)
+    except ApprovalGateError as exc:
+        raise WorkflowTransitionError("Verified approval is required for dispatch") from exc
