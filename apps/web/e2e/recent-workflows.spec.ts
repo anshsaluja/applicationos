@@ -58,6 +58,6 @@ test("failed refresh reports an error without erasing the last successful page",
   await expect(page.getByRole("list", { name: "Recent workflows" }).getByRole("button", { name: FIRST })).toBeVisible();
   fail = true;
   await page.getByRole("button", { name: "Refresh workflows" }).click();
-  await expect(page.getByRole("alert")).toContainText("Database unavailable");
+  await expect(page.getByRole("alert").filter({ hasText: "Database unavailable" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Recent workflows" }).getByRole("button", { name: FIRST })).toBeVisible();
 });
