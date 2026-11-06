@@ -49,6 +49,13 @@ def transition(
     boundary must independently recheck approval and idempotency.
     """
     if target == state.status:
+        # Idempotent reads of an executable state must not bypass the approval
+        # boundary if the durable decision has been revoked or is unavailable.
+        if target in {WorkflowStatus.READY, WorkflowStatus.RUNNING}:
+            try:
+                require_approved(approval, state.action_id)
+            except ApprovalGateError as exc:
+                raise WorkflowTransitionError("Verified approval is required") from exc
         return state.model_copy(deep=True)
 
     allowed = {
