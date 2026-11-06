@@ -24,6 +24,10 @@ export default function Home() {
   const [workflowId, setWorkflowId] = useState("");
   const [workflow, setWorkflow] = useState<WorkflowCheckpoint | null>(null);
   const [workflowError, setWorkflowError] = useState("");
+  const [recentWorkflows, setRecentWorkflows] = useState<WorkflowCheckpoint[]>([]);
+  const [recentOffset, setRecentOffset] = useState(0);
+  const [recentBusy, setRecentBusy] = useState(false);
+  const [recentError, setRecentError] = useState("");
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [workflowNotice, setWorkflowNotice] = useState("");
@@ -80,6 +84,21 @@ export default function Home() {
     } catch (err) {
       setWorkflowError(err instanceof Error ? err.message : "Unable to load workflow");
     } finally { setWorkflowBusy(false); }
+  }
+
+  async function loadRecentWorkflows(offset: number) {
+    if (recentBusy) return;
+    setRecentBusy(true);
+    setRecentError("");
+    try {
+      const rows = await responseJson<WorkflowCheckpoint[]>(await fetch(
+        `${API}/v1/workflows?limit=10&offset=${offset}`, { cache: "no-store" }
+      ));
+      setRecentWorkflows(rows);
+      setRecentOffset(offset);
+    } catch (err) {
+      setRecentError(err instanceof Error ? err.message : "Unable to list workflows");
+    } finally { setRecentBusy(false); }
   }
 
   async function mutateWorkflow(operation: "create" | "request-review") {
@@ -159,6 +178,23 @@ export default function Home() {
       <section style={{ marginTop: "2rem", borderTop: "1px solid #ddd", paddingTop: "1rem" }}>
         <h2>Workflow checkpoint</h2>
         <p>Inspect durable workflow state by action ID. This read-only view cannot approve or execute actions.</p>
+        <div style={{ padding: "1rem", border: "1px solid #ddd", borderRadius: 12, marginBottom: "1.5rem" }}>
+          <h3>Recent workflow checkpoints</h3>
+          <p>Read-only, paginated inspection. Select an action to load its persisted state.</p>
+          <button type="button" disabled={recentBusy} onClick={() => void loadRecentWorkflows(0)}>{recentBusy ? "Loading…" : "Refresh workflows"}</button>
+          {recentError && <p role="alert">{recentError}</p>}
+          <ul aria-label="Recent workflows">
+            {recentWorkflows.map((item) => <li key={item.action_id} style={{ marginTop: "0.75rem" }}>
+              <button type="button" onClick={() => { setWorkflowId(item.action_id); setWorkflow(item); setWorkflowError(""); }}>
+                {item.action_id}
+              </button> — {item.status.replaceAll("_", " ")} (attempt {item.attempt}/{item.max_attempts})
+            </li>)}
+          </ul>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button type="button" disabled={recentBusy || recentOffset === 0} onClick={() => void loadRecentWorkflows(Math.max(0, recentOffset - 10))}>Previous</button>
+            <button type="button" disabled={recentBusy || recentWorkflows.length < 10} onClick={() => void loadRecentWorkflows(recentOffset + 10)}>Next</button>
+          </div>
+        </div>
         <form onSubmit={loadWorkflow}>
           <label htmlFor="workflow-id">Action UUID</label>
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
