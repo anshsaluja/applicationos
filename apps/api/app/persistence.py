@@ -329,6 +329,44 @@ class WorkflowRepository:
         self.session.flush()
         return claimed
 
+    def claim_next_ready(self):
+        """Claim the next approved READY action without blocking other workers.
+
+        Uses SKIP LOCKED so parallel workers can claim different actions.
+        An approval is read from persisted state and revalidated by the
+        domain transition before any checkpoint is updated. No external
+        side effects are dispatched by this method.
+        """
+        from .domain.approvals import ApprovalStatus
+        from .domain.workflows import (
+            WorkflowStatus,
+            require_dispatch_authorization,
+            transition,
+        )
+
+        row = (
+            self.session.query(WorkflowRow)
+            .join(ApprovalRow, ApprovalRow.action_id == WorkflowRow.action_id)
+            .filter(
+                WorkflowRow.status == WorkflowStatus.READY.value,
+                WorkflowRow.attempt < WorkflowRow.max_attempts,
+                ApprovalRow.status == ApprovalStatus.APPROVED.value,
+            )
+            .order_by(WorkflowRow.action_id)
+            .with_for_update(of=WorkflowRow, skip_locked=True)
+            .first()
+        )
+        if row is None:
+            return None
+        approval = ApprovalRepository(self.session).get(row.action_id)
+        claimed = transition(self._state(row), WorkflowStatus.RUNNING, approval=approval)
+        require_dispatch_authorization(claimed, approval=approval)
+        row.status = claimed.status.value
+        row.attempt = claimed.attempt
+        row.last_error = claimed.last_error
+        self.session.flush()
+        return claimed
+
     def recover_interrupted(self, action_id: UUID, *, reason: str = "Worker interrupted"):
         """Mark an interrupted RUNNING attempt as failed without replaying effects.
 
