@@ -254,6 +254,23 @@ class WorkflowRepository:
         row = self.session.get(WorkflowRow, action_id)
         return None if row is None else self._state(row)
 
+    def list_recent(self, *, limit: int = 50, offset: int = 0):
+        """Read-only bounded listing for local workflow inspection.
+
+        Ordering is deterministic even when workflows are inserted concurrently.
+        This is not a tenant-isolated endpoint; do not expose it publicly without auth.
+        """
+        if not 1 <= limit <= 100 or not 0 <= offset <= 10000:
+            raise ValueError("Invalid workflow pagination")
+        rows = (
+            self.session.query(WorkflowRow)
+            .order_by(WorkflowRow.action_id)
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return [self._state(row) for row in rows]
+
     def advance(self, action_id: UUID, target, *, error: str | None = None):
         from .domain.workflows import WorkflowStatus, WorkflowTransitionError, transition
 
