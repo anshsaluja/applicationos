@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from .documents import ingest_upload
@@ -153,7 +153,7 @@ class WorkflowCheckpointResponse(BaseModel):
 
 
 @router.get("/workflows", response_model=list[WorkflowCheckpointResponse], tags=["workflows"])
-def list_workflow_checkpoints(limit: int = __import__("fastapi").Query(default=50, ge=1, le=100), offset: int = __import__("fastapi").Query(default=0, ge=0, le=10000)) -> list[WorkflowCheckpointResponse]:
+def list_workflow_checkpoints(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0, le=10000)) -> list[WorkflowCheckpointResponse]:
     """Bounded read-only checkpoint inspection for local development.
 
     This endpoint is not tenant-isolated; require authentication before hosting.
