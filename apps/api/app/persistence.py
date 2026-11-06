@@ -295,6 +295,40 @@ class WorkflowRepository:
         self.session.flush()
         return updated
 
+    def claim_ready(self, action_id: UUID):
+        """Atomically claim one approved READY action for a single attempt.
+
+        Row locking prevents concurrent workers from claiming the same attempt.
+        This records a RUNNING checkpoint only; it does not dispatch side effects.
+        A real worker still needs an outbox and external idempotency reconciliation.
+        """
+        from .domain.workflows import (
+            WorkflowStatus,
+            WorkflowTransitionError,
+            require_dispatch_authorization,
+            transition,
+        )
+
+        row = (
+            self.session.query(WorkflowRow)
+            .filter_by(action_id=action_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        if row is None:
+            raise WorkflowTransitionError("Workflow not found")
+        current = self._state(row)
+        if current.status != WorkflowStatus.READY:
+            raise WorkflowTransitionError("Only ready workflows can be claimed")
+        approval = ApprovalRepository(self.session).get(action_id)
+        claimed = transition(current, WorkflowStatus.RUNNING, approval=approval)
+        require_dispatch_authorization(claimed, approval=approval)
+        row.status = claimed.status.value
+        row.attempt = claimed.attempt
+        row.last_error = claimed.last_error
+        self.session.flush()
+        return claimed
+
     def recover_interrupted(self, action_id: UUID, *, reason: str = "Worker interrupted"):
         """Mark an interrupted RUNNING attempt as failed without replaying effects.
 
