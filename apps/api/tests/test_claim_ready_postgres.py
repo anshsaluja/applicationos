@@ -123,4 +123,6 @@ def test_batch_claim_skips_locked_rows_and_claims_distinct_work(factory):
         assert claimed.attempt == 1
 
     with factory.begin() as session:
-        assert WorkflowRepository(session).claim_next_ready() is None
+        repo = WorkflowRepository(session)
+        assert repo.get(ordered[0]).status == WorkflowStatus.RUNNING
+        assert repo.get(ordered[1]).status == WorkflowStatus.RUNNING
