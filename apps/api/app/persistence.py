@@ -306,6 +306,35 @@ class WorkflowOutboxRepository:
         return row
 
 
+    def quarantine_interrupted_claim(self, action_id: UUID, *, reason: str) -> WorkflowOutboxRow:
+        """Fail closed after an interrupted claim; never silently replay effects.
+
+        Operators must first establish that the original worker has stopped.
+        A claimed intent may already have caused an external side effect, so
+        quarantine it for manual reconciliation instead of making it pending.
+        This operation is idempotent and cannot resurrect terminal intents.
+        """
+        from .domain.workflows import WorkflowTransitionError
+
+        if not reason.strip():
+            raise WorkflowTransitionError("Reconciliation reason must not be empty")
+        row = (
+            self.session.query(WorkflowOutboxRow)
+            .filter_by(action_id=action_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        if row is None:
+            raise WorkflowTransitionError("Outbox intent not found")
+        if row.status == "quarantined":
+            return row
+        if row.status != "claimed":
+            raise WorkflowTransitionError("Only claimed intents can be reconciled")
+        row.status = "quarantined"
+        self.session.flush()
+        return row
+
+
 class WorkflowRepository:
     """Atomic, locked workflow transitions with approval rechecks.
 
