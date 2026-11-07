@@ -82,11 +82,11 @@ def test_outbox_claim_is_single_use_and_rechecks_approval(factory):
 
     with factory.begin() as session:
         outbox = WorkflowOutboxRepository(session)
-        claimed = outbox.claim_next_pending()
+        claimed = outbox.claim_next_pending(action_id=action_id)
         assert claimed is not None
         assert claimed.action_id == action_id
         assert claimed.status == "claimed"
-        assert outbox.claim_next_pending() is None
+        assert outbox.claim_next_pending(action_id=action_id) is None
 
 
 def test_outbox_quarantines_stale_workflow_before_dispatch(factory):
@@ -102,5 +102,5 @@ def test_outbox_quarantines_stale_workflow_before_dispatch(factory):
         workflow.advance(action_id, WorkflowStatus.FAILED)
 
     with factory.begin() as session:
-        assert WorkflowOutboxRepository(session).claim_next_pending() is None
+        assert WorkflowOutboxRepository(session).claim_next_pending(action_id=action_id) is None
         assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
