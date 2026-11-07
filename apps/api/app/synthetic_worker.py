@@ -39,5 +39,5 @@ def dispatch_one_synthetic(session_factory, *, action_id: UUID | None = None):
     # No network calls, filesystem writes, or other external effects here.
     # Future effect adapters require durable receipts and external idempotency.
     with session_factory.begin() as session:
-        WorkflowOutboxRepository(session).mark_dispatched(receipt.action_id)
+        WorkflowOutboxRepository(session).mark_dispatched(receipt.action_id, synthetic_receipt=True)
     return receipt
