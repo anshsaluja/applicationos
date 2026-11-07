@@ -222,6 +222,18 @@ class WorkflowOutboxRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class SyntheticReceiptRow(Base):
+    """Durable proof of a local no-op acknowledgement, not an external effect."""
+
+    __tablename__ = "synthetic_dispatch_receipts"
+    action_id: Mapped[UUID] = mapped_column(
+        ForeignKey("workflow_outbox.action_id", ondelete="CASCADE"), primary_key=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
+    adapter: Mapped[str] = mapped_column(String(40), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class WorkflowOutboxRepository:
     """Persist a single dispatch intent in the workflow-claim transaction.
 
@@ -335,7 +347,7 @@ class WorkflowOutboxRepository:
         return row
 
 
-    def mark_dispatched(self, action_id: UUID) -> WorkflowOutboxRow:
+    def mark_dispatched(self, action_id: UUID, *, synthetic_receipt: bool = False) -> WorkflowOutboxRow:
         """Record a confirmed synthetic dispatch without replaying the action.
 
         This method is deliberately bookkeeping-only. Callers must first
@@ -370,6 +382,15 @@ class WorkflowOutboxRepository:
             or ApprovalRepository(self.session).get(action_id).status != ApprovalStatus.APPROVED
         ):
             raise WorkflowTransitionError("Workflow checkpoint or approval changed before dispatch completion")
+        if synthetic_receipt:
+            self.session.add(
+                SyntheticReceiptRow(
+                    action_id=action_id,
+                    idempotency_key=row.idempotency_key,
+                    adapter="synthetic-noop",
+                    recorded_at=datetime.now(UTC),
+                )
+            )
         row.status = "dispatched"
         self.session.flush()
         return row
