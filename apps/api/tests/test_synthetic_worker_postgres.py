@@ -13,10 +13,10 @@ from app.domain.workflows import WorkflowState, WorkflowStatus
 from app.persistence import (
     ApprovalRepository,
     Base,
+    SyntheticReceiptRow,
     WorkflowOutboxRepository,
     WorkflowOutboxRow,
     WorkflowRepository,
-    SyntheticReceiptRow,
 )
 from app.synthetic_worker import dispatch_one_synthetic
 
