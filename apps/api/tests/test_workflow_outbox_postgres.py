@@ -104,3 +104,31 @@ def test_outbox_quarantines_stale_workflow_before_dispatch(factory):
     with factory.begin() as session:
         assert WorkflowOutboxRepository(session).claim_next_pending(action_id=action_id) is None
         assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
+
+
+def test_interrupted_outbox_claim_requires_explicit_quarantine(factory):
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(action_id)
+        with pytest.raises(WorkflowTransitionError, match="Only claimed"):
+            outbox.quarantine_interrupted_claim(action_id, reason="worker stopped")
+        assert outbox.claim_next_pending(action_id=action_id) is not None
+
+    with factory.begin() as session:
+        outbox = WorkflowOutboxRepository(session)
+        with pytest.raises(WorkflowTransitionError, match="reason"):
+            outbox.quarantine_interrupted_claim(action_id, reason="  ")
+        quarantined = outbox.quarantine_interrupted_claim(action_id, reason="worker stopped")
+        assert quarantined.status == "quarantined"
+        assert outbox.quarantine_interrupted_claim(action_id, reason="repeat").status == "quarantined"
+        assert outbox.claim_next_pending(action_id=action_id) is None
+
+    with factory.begin() as session:
+        assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
