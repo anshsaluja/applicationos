@@ -6,11 +6,11 @@ import hashlib
 import os
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
-from uuid import uuid4
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, select, func
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
 from app.persistence import Base, DocumentRepository, DocumentRow
