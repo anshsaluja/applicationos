@@ -84,19 +84,35 @@ class DocumentRepository:
         self.session = session
 
     def add(self, document) -> DocumentRow:
-        existing = self.session.query(DocumentRow).filter_by(sha256=document.sha256).one_or_none()
-        if existing is not None:
-            return existing
-        row = DocumentRow(
-            id=document.id,
-            filename=document.filename,
-            media_type=document.media_type,
-            sha256=document.sha256,
-            text=document.text,
-            created_at=datetime.now(UTC),
+        """Deduplicate content atomically across concurrent PostgreSQL sessions.
+
+        A read-before-insert races when two requests ingest identical bytes.
+        ON CONFLICT waits for a competing insert and preserves its original
+        provenance/identity. The subsequent SELECT runs after that statement,
+        so READ COMMITTED sees the winning committed row.
+        """
+        from sqlalchemy.dialects.postgresql import insert
+
+        statement = (
+            insert(DocumentRow)
+            .values(
+                id=document.id,
+                filename=document.filename,
+                media_type=document.media_type,
+                sha256=document.sha256,
+                text=document.text,
+                created_at=datetime.now(UTC),
+            )
+            .on_conflict_do_nothing(index_elements=[DocumentRow.sha256])
+            .returning(DocumentRow.id)
         )
-        self.session.add(row)
-        self.session.flush()
+        inserted_id = self.session.execute(statement).scalar_one_or_none()
+        if inserted_id is not None:
+            row = self.session.get(DocumentRow, inserted_id)
+        else:
+            row = self.session.query(DocumentRow).filter_by(sha256=document.sha256).one_or_none()
+        if row is None:
+            raise RuntimeError("Document deduplication failed to resolve a persisted row")
         return row
 
 
