@@ -132,3 +132,46 @@ def test_interrupted_outbox_claim_requires_explicit_quarantine(factory):
 
     with factory.begin() as session:
         assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
+
+
+def test_confirmed_dispatch_is_idempotent_and_cannot_replay(factory):
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(action_id)
+        with pytest.raises(WorkflowTransitionError, match="Only claimed"):
+            outbox.mark_dispatched(action_id)
+        assert outbox.claim_next_pending(action_id=action_id) is not None
+        assert outbox.mark_dispatched(action_id).status == "dispatched"
+        assert outbox.mark_dispatched(action_id).status == "dispatched"
+        assert outbox.claim_next_pending(action_id=action_id) is None
+
+    with factory.begin() as session:
+        assert session.get(WorkflowOutboxRow, action_id).status == "dispatched"
+        with pytest.raises(WorkflowTransitionError, match="Only claimed"):
+            WorkflowOutboxRepository(session).quarantine_interrupted_claim(
+                action_id, reason="must not reopen completed dispatch"
+            )
+
+
+def test_quarantined_dispatch_cannot_be_marked_complete(factory):
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(action_id)
+        outbox.claim_next_pending(action_id=action_id)
+        outbox.quarantine_interrupted_claim(action_id, reason="unknown effect status")
+        with pytest.raises(WorkflowTransitionError, match="Only claimed"):
+            outbox.mark_dispatched(action_id)
