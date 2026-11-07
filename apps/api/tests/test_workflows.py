@@ -7,8 +7,8 @@ from app.domain.workflows import (
     WorkflowState,
     WorkflowStatus,
     WorkflowTransitionError,
-    transition,
     require_dispatch_authorization,
+    transition,
 )
 
 
