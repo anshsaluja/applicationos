@@ -267,7 +267,7 @@ class WorkflowOutboxRepository:
         return result
 
 
-    def claim_next_pending(self) -> WorkflowOutboxRow | None:
+    def claim_next_pending(self, *, action_id: UUID | None = None) -> WorkflowOutboxRow | None:
         """Claim one pending dispatch intent without executing external effects.
 
         Concurrent consumers skip locked rows. Approval and the RUNNING
@@ -279,13 +279,10 @@ class WorkflowOutboxRepository:
         from .domain.approvals import ApprovalStatus
         from .domain.workflows import WorkflowStatus
 
-        row = (
-            self.session.query(WorkflowOutboxRow)
-            .filter(WorkflowOutboxRow.status == "pending")
-            .order_by(WorkflowOutboxRow.created_at, WorkflowOutboxRow.action_id)
-            .with_for_update(skip_locked=True)
-            .first()
-        )
+        query = self.session.query(WorkflowOutboxRow).filter(WorkflowOutboxRow.status == "pending")
+        if action_id is not None:
+            query = query.filter(WorkflowOutboxRow.action_id == action_id)
+        row = query.order_by(WorkflowOutboxRow.created_at, WorkflowOutboxRow.action_id).with_for_update(skip_locked=True).first()
         if row is None:
             return None
         workflow = (
