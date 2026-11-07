@@ -4,6 +4,7 @@ Run against a disposable database only:
     TEST_DATABASE_URL=postgresql+psycopg://... pytest -q tests/test_claim_ready_postgres.py
 Never point TEST_DATABASE_URL at production or a shared development database.
 """
+
 from __future__ import annotations
 
 import os
