@@ -208,6 +208,65 @@ class WorkflowRow(Base):
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+
+class WorkflowOutboxRow(Base):
+    """Transactional dispatch intent; never an authorization to execute effects."""
+
+    __tablename__ = "workflow_outbox"
+    action_id: Mapped[UUID] = mapped_column(
+        ForeignKey("workflow_checkpoints.action_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class WorkflowOutboxRepository:
+    """Persist a single dispatch intent in the workflow-claim transaction.
+
+    No worker may interpret an outbox row as sufficient authorization: it must
+    recheck the current persisted approval and workflow state before effects.
+    """
+
+    def __init__(self, session):
+        self.session = session
+
+    def enqueue_claimed(self, action_id: UUID) -> WorkflowOutboxRow:
+        from sqlalchemy.dialects.postgresql import insert
+
+        from .domain.approvals import ApprovalStatus
+        from .domain.workflows import WorkflowStatus, WorkflowTransitionError
+
+        row = (
+            self.session.query(WorkflowRow)
+            .filter_by(action_id=action_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        if row is None or row.status != WorkflowStatus.RUNNING.value:
+            raise WorkflowTransitionError("Only a claimed running workflow can be enqueued")
+        approval = ApprovalRepository(self.session).get(action_id)
+        if approval.status != ApprovalStatus.APPROVED:
+            raise WorkflowTransitionError("Persisted approval required for outbox enqueue")
+
+        statement = (
+            insert(WorkflowOutboxRow)
+            .values(
+                action_id=action_id,
+                idempotency_key=row.idempotency_key,
+                status="pending",
+                created_at=datetime.now(UTC),
+            )
+            .on_conflict_do_nothing(index_elements=[WorkflowOutboxRow.action_id])
+        )
+        self.session.execute(statement)
+        result = self.session.get(WorkflowOutboxRow, action_id)
+        if result is None or result.idempotency_key != row.idempotency_key:
+            raise WorkflowTransitionError("Outbox idempotency conflict")
+        return result
+
+
 class WorkflowRepository:
     """Atomic, locked workflow transitions with approval rechecks.
 
