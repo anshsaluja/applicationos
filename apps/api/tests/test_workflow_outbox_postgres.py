@@ -59,11 +59,10 @@ def test_outbox_rollback_is_atomic_with_claim(factory):
         ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
         repo.advance(action_id, WorkflowStatus.READY)
 
-    with pytest.raises(RuntimeError, match="rollback"):
-        with factory.begin() as session:
-            WorkflowRepository(session).claim_ready(action_id)
-            WorkflowOutboxRepository(session).enqueue_claimed(action_id)
-            raise RuntimeError("rollback")
+    with pytest.raises(RuntimeError, match="rollback"), factory.begin() as session:
+        WorkflowRepository(session).claim_ready(action_id)
+        WorkflowOutboxRepository(session).enqueue_claimed(action_id)
+        raise RuntimeError("rollback")
 
     with factory.begin() as session:
         assert WorkflowRepository(session).get(action_id).status == WorkflowStatus.READY
