@@ -267,6 +267,48 @@ class WorkflowOutboxRepository:
         return result
 
 
+    def claim_next_pending(self) -> WorkflowOutboxRow | None:
+        """Claim one pending dispatch intent without executing external effects.
+
+        Concurrent consumers skip locked rows. Approval and the RUNNING
+        checkpoint are revalidated while both rows are locked. An invalid
+        intent is quarantined rather than returned for execution.
+        Claiming is not a lease: interrupted claims require explicit
+        reconciliation before any retry or external side effect.
+        """
+        from .domain.approvals import ApprovalStatus
+        from .domain.workflows import WorkflowStatus
+
+        row = (
+            self.session.query(WorkflowOutboxRow)
+            .filter(WorkflowOutboxRow.status == "pending")
+            .order_by(WorkflowOutboxRow.created_at, WorkflowOutboxRow.action_id)
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+        if row is None:
+            return None
+        workflow = (
+            self.session.query(WorkflowRow)
+            .filter_by(action_id=row.action_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        approval = ApprovalRepository(self.session).get(row.action_id)
+        if (
+            workflow is None
+            or workflow.status != WorkflowStatus.RUNNING.value
+            or workflow.idempotency_key != row.idempotency_key
+            or approval.status != ApprovalStatus.APPROVED
+        ):
+            row.status = "quarantined"
+            self.session.flush()
+            return None
+        row.status = "claimed"
+        self.session.flush()
+        return row
+
+
 class WorkflowRepository:
     """Atomic, locked workflow transitions with approval rechecks.
 
