@@ -46,9 +46,8 @@ def new_workflow(factory, *, approve=True, max_attempts=2):
 
 def test_claim_requires_durable_approval(factory):
     action_id = new_workflow(factory, approve=False)
-    with factory.begin() as session:
-        with pytest.raises(WorkflowTransitionError):
-            WorkflowRepository(session).claim_ready(action_id)
+    with factory.begin() as session, pytest.raises(WorkflowTransitionError):
+        WorkflowRepository(session).claim_ready(action_id)
 
 
 def test_claim_is_single_winner_across_sessions(factory):
