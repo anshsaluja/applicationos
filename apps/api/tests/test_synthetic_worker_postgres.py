@@ -15,6 +15,7 @@ from app.persistence import (
     Base,
     SyntheticReceiptRow,
     WorkflowOutboxRepository,
+    WorkflowRow,
     WorkflowOutboxRow,
     WorkflowRepository,
 )
@@ -53,6 +54,7 @@ def test_synthetic_dispatch_requires_approval_and_is_single_use(factory):
     with factory.begin() as session:
         row = session.get(WorkflowOutboxRow, action_id)
         assert row.status == "dispatched"
+        assert session.get(WorkflowRow, action_id).status == WorkflowStatus.SUCCEEDED.value
         assert row.idempotency_key == receipt.idempotency_key
         durable = session.get(SyntheticReceiptRow, action_id)
         assert durable is not None
@@ -81,3 +83,26 @@ def test_synthetic_worker_does_not_claim_unapproved_intent(factory):
     with factory.begin() as session:
         assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
         assert session.get(SyntheticReceiptRow, action_id) is None
+
+
+def test_synthetic_completion_requires_matching_receipt(factory):
+    from app.domain.workflows import WorkflowTransitionError
+
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(action_id)
+        with pytest.raises(WorkflowTransitionError, match="receipt"):
+            outbox.complete_synthetic(action_id)
+        assert session.get(WorkflowRow, action_id).status == WorkflowStatus.RUNNING.value
+
+    assert dispatch_one_synthetic(factory, action_id=action_id) is not None
+    with factory.begin() as session:
+        outbox = WorkflowOutboxRepository(session)
+        assert outbox.complete_synthetic(action_id).status == WorkflowStatus.SUCCEEDED.value
