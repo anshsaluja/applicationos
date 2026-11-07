@@ -16,7 +16,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.domain.workflows import WorkflowState, WorkflowStatus, WorkflowTransitionError
-from app.persistence import Base, ApprovalRepository, WorkflowRepository
+from app.persistence import ApprovalRepository, Base, WorkflowRepository
 
 
 @pytest.fixture(scope="module")
