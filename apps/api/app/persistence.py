@@ -335,6 +335,44 @@ class WorkflowOutboxRepository:
         return row
 
 
+    def mark_dispatched(self, action_id: UUID) -> WorkflowOutboxRow:
+        """Record a confirmed synthetic dispatch without replaying the action.
+
+        This method is deliberately bookkeeping-only. Callers must first
+        establish that their effect adapter completed successfully. A crashed
+        worker's claimed row remains claimed until explicit reconciliation.
+        """
+        from .domain.workflows import WorkflowStatus, WorkflowTransitionError
+
+        row = (
+            self.session.query(WorkflowOutboxRow)
+            .filter_by(action_id=action_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        if row is None:
+            raise WorkflowTransitionError("Outbox intent not found")
+        if row.status == "dispatched":
+            return row
+        if row.status != "claimed":
+            raise WorkflowTransitionError("Only claimed intents can be completed")
+        workflow = (
+            self.session.query(WorkflowRow)
+            .filter_by(action_id=action_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        if (
+            workflow is None
+            or workflow.status != WorkflowStatus.RUNNING.value
+            or workflow.idempotency_key != row.idempotency_key
+        ):
+            raise WorkflowTransitionError("Workflow checkpoint changed before dispatch completion")
+        row.status = "dispatched"
+        self.session.flush()
+        return row
+
+
 class WorkflowRepository:
     """Atomic, locked workflow transitions with approval rechecks.
 
