@@ -396,6 +396,47 @@ class WorkflowOutboxRepository:
         return row
 
 
+    def complete_synthetic(self, action_id: UUID) -> WorkflowRow:
+        """Atomically finish a no-op workflow only after a durable receipt.
+
+        Called in the same transaction as mark_dispatched. Repeated calls are
+        harmless, but missing or mismatched receipts never imply success.
+        """
+        from .domain.workflows import WorkflowStatus, WorkflowTransitionError
+
+        outbox = (
+            self.session.query(WorkflowOutboxRow)
+            .filter_by(action_id=action_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        workflow = (
+            self.session.query(WorkflowRow)
+            .filter_by(action_id=action_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        receipt = self.session.get(SyntheticReceiptRow, action_id)
+        if (
+            outbox is None
+            or workflow is None
+            or receipt is None
+            or outbox.status != "dispatched"
+            or receipt.adapter != "synthetic-noop"
+            or receipt.idempotency_key != outbox.idempotency_key
+            or workflow.idempotency_key != outbox.idempotency_key
+        ):
+            raise WorkflowTransitionError("Verified synthetic receipt required for completion")
+        if workflow.status == WorkflowStatus.SUCCEEDED.value:
+            return workflow
+        if workflow.status != WorkflowStatus.RUNNING.value:
+            raise WorkflowTransitionError("Only running workflows can complete")
+        workflow.status = WorkflowStatus.SUCCEEDED.value
+        workflow.last_error = None
+        self.session.flush()
+        return workflow
+
+
 class WorkflowRepository:
     """Atomic, locked workflow transitions with approval rechecks.
 
