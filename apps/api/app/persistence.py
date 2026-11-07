@@ -342,6 +342,7 @@ class WorkflowOutboxRepository:
         establish that their effect adapter completed successfully. A crashed
         worker's claimed row remains claimed until explicit reconciliation.
         """
+        from .domain.approvals import ApprovalStatus
         from .domain.workflows import WorkflowStatus, WorkflowTransitionError
 
         row = (
@@ -366,8 +367,9 @@ class WorkflowOutboxRepository:
             workflow is None
             or workflow.status != WorkflowStatus.RUNNING.value
             or workflow.idempotency_key != row.idempotency_key
+            or ApprovalRepository(self.session).get(action_id).status != ApprovalStatus.APPROVED
         ):
-            raise WorkflowTransitionError("Workflow checkpoint changed before dispatch completion")
+            raise WorkflowTransitionError("Workflow checkpoint or approval changed before dispatch completion")
         row.status = "dispatched"
         self.session.flush()
         return row
