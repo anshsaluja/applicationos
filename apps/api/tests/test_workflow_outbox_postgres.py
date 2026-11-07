@@ -67,3 +67,40 @@ def test_outbox_rollback_is_atomic_with_claim(factory):
     with factory.begin() as session:
         assert WorkflowRepository(session).get(action_id).status == WorkflowStatus.READY
         assert session.get(WorkflowOutboxRow, action_id) is None
+
+
+def test_outbox_claim_is_single_use_and_rechecks_approval(factory):
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        WorkflowOutboxRepository(session).enqueue_claimed(action_id)
+
+    with factory.begin() as session:
+        outbox = WorkflowOutboxRepository(session)
+        claimed = outbox.claim_next_pending()
+        assert claimed is not None
+        assert claimed.action_id == action_id
+        assert claimed.status == "claimed"
+        assert outbox.claim_next_pending() is None
+
+
+def test_outbox_quarantines_stale_workflow_before_dispatch(factory):
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        WorkflowOutboxRepository(session).enqueue_claimed(action_id)
+        workflow.advance(action_id, WorkflowStatus.FAILED)
+
+    with factory.begin() as session:
+        assert WorkflowOutboxRepository(session).claim_next_pending() is None
+        assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
