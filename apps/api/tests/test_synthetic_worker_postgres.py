@@ -16,6 +16,7 @@ from app.persistence import (
     WorkflowOutboxRepository,
     WorkflowOutboxRow,
     WorkflowRepository,
+    SyntheticReceiptRow,
 )
 from app.synthetic_worker import dispatch_one_synthetic
 
@@ -53,6 +54,10 @@ def test_synthetic_dispatch_requires_approval_and_is_single_use(factory):
         row = session.get(WorkflowOutboxRow, action_id)
         assert row.status == "dispatched"
         assert row.idempotency_key == receipt.idempotency_key
+        durable = session.get(SyntheticReceiptRow, action_id)
+        assert durable is not None
+        assert durable.idempotency_key == receipt.idempotency_key
+        assert durable.adapter == "synthetic-noop"
 
 
 def test_synthetic_worker_does_not_claim_unapproved_intent(factory):
@@ -75,3 +80,4 @@ def test_synthetic_worker_does_not_claim_unapproved_intent(factory):
     assert dispatch_one_synthetic(factory, action_id=action_id) is None
     with factory.begin() as session:
         assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
+        assert session.get(SyntheticReceiptRow, action_id) is None
