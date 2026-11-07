@@ -43,6 +43,8 @@ jobs:
       - name: Install API and dev dependencies
         run: pip install -e '.[dev]'
       - name: Lint
+        id: lint
+        continue-on-error: true
         run: ruff check . --output-format github
       - name: Prepare PostgreSQL schema
         run: |
@@ -59,6 +61,13 @@ jobs:
           PY
       - name: Test
         run: pytest -q
+      - name: Enforce lint gate
+        if: always()
+        run: |
+          if [ '${{ steps.lint.outcome }}' != 'success' ]; then
+            echo 'API lint did not pass; refusing green CI.' >&2
+            exit 1
+          fi
 
   web:
     runs-on: ubuntu-latest
