@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from app.domain.workflows import WorkflowState, WorkflowStatus, WorkflowTransitionError
 from app.persistence import (
     ApprovalRepository,
+    ApprovalRow,
     Base,
     WorkflowOutboxRepository,
     WorkflowOutboxRow,
@@ -175,3 +176,28 @@ def test_quarantined_dispatch_cannot_be_marked_complete(factory):
         outbox.quarantine_interrupted_claim(action_id, reason="unknown effect status")
         with pytest.raises(WorkflowTransitionError, match="Only claimed"):
             outbox.mark_dispatched(action_id)
+
+
+def test_dispatch_confirmation_rechecks_persisted_approval(factory):
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(action_id)
+        assert outbox.claim_next_pending(action_id=action_id) is not None
+
+    # Simulate an out-of-band invalidation between claim and confirmation.
+    # Terminal approval decisions are normally immutable through the repository.
+    with factory.begin() as session:
+        session.get(ApprovalRow, action_id).status = "rejected"
+
+    with factory.begin() as session:
+        outbox = WorkflowOutboxRepository(session)
+        with pytest.raises(WorkflowTransitionError, match="approval changed"):
+            outbox.mark_dispatched(action_id)
+        assert session.get(WorkflowOutboxRow, action_id).status == "claimed"
