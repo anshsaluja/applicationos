@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import unicodedata
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
@@ -72,5 +73,8 @@ def _extract_pdf(data: bytes) -> str:
 def _safe_filename(filename: str | None) -> str:
     """Store a display-only basename, never a client-supplied path or control characters."""
     basename = (filename or "document").replace("\\", "/").split("/")[-1]
-    basename = "".join(ch for ch in basename if ch.isprintable() and ch not in "/\\").strip()
+    basename = "".join(
+        ch for ch in unicodedata.normalize("NFC", basename)
+        if ch.isprintable() and unicodedata.category(ch) != "Cf" and ch not in "/\\\\"
+    ).strip()
     return basename[:240] or "document"
