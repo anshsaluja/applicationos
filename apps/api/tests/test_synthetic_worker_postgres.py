@@ -123,12 +123,11 @@ def test_synthetic_confirmation_rolls_back_receipt_and_status_together(factory):
     with factory.begin() as session:
         assert WorkflowOutboxRepository(session).claim_next_pending(action_id=action_id) is not None
 
-    with pytest.raises(RuntimeError, match="simulated transaction failure"):
-        with factory.begin() as session:
-            repository = WorkflowOutboxRepository(session)
-            repository.mark_dispatched(action_id, synthetic_receipt=True)
-            repository.complete_synthetic(action_id)
-            raise RuntimeError("simulated transaction failure")
+    with pytest.raises(RuntimeError, match="simulated transaction failure"), factory.begin() as session:
+        repository = WorkflowOutboxRepository(session)
+        repository.mark_dispatched(action_id, synthetic_receipt=True)
+        repository.complete_synthetic(action_id)
+        raise RuntimeError("simulated transaction failure")
 
     with factory.begin() as session:
         assert session.get(SyntheticReceiptRow, action_id) is None
