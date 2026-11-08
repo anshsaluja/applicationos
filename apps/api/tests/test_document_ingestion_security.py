@@ -49,3 +49,11 @@ async def test_upload_filename_is_sanitized():
 def test_filename_is_bounded_and_never_empty():
     assert _safe_filename("a" * 300) == "a" * 240
     assert _safe_filename("\x00/") == "document"
+
+
+def test_filename_removes_invisible_direction_and_format_controls():
+    # These characters are not printable to users but can disguise extensions
+    # or change how provenance filenames are rendered in the review UI.
+    assert _safe_filename("report\u202egnp.exe.txt") == "reportgnp.exe.txt"
+    assert _safe_filename("review\u200b-notes\u2066.txt") == "review-notes.txt"
+    assert _safe_filename("Cafe\u0301.txt") == "Caf\u00e9.txt"
