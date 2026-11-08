@@ -106,3 +106,39 @@ def test_synthetic_completion_requires_matching_receipt(factory):
     with factory.begin() as session:
         outbox = WorkflowOutboxRepository(session)
         assert outbox.complete_synthetic(action_id).status == WorkflowStatus.SUCCEEDED.value
+
+
+def test_synthetic_confirmation_rolls_back_receipt_and_status_together(factory):
+    """A failed confirmation transaction must never leave a phantom receipt."""
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        WorkflowOutboxRepository(session).enqueue_claimed(action_id)
+
+    with factory.begin() as session:
+        assert WorkflowOutboxRepository(session).claim_next_pending(action_id=action_id) is not None
+
+    with pytest.raises(RuntimeError, match="simulated transaction failure"):
+        with factory.begin() as session:
+            repository = WorkflowOutboxRepository(session)
+            repository.mark_dispatched(action_id, synthetic_receipt=True)
+            repository.complete_synthetic(action_id)
+            raise RuntimeError("simulated transaction failure")
+
+    with factory.begin() as session:
+        assert session.get(SyntheticReceiptRow, action_id) is None
+        assert session.get(WorkflowOutboxRow, action_id).status == "claimed"
+        assert session.get(WorkflowRow, action_id).status == WorkflowStatus.RUNNING.value
+
+    # An operator must reconcile the interrupted claim; never auto-replay it.
+    with factory.begin() as session:
+        row = WorkflowOutboxRepository(session).quarantine_interrupted_claim(
+            action_id, reason="simulated crash after claim"
+        )
+        assert row.status == "quarantined"
+    assert dispatch_one_synthetic(factory, action_id=action_id) is None
