@@ -56,3 +56,20 @@ def test_cli_action_id_is_forwarded(monkeypatch):
     action_id = uuid4()
     assert synthetic_cli.main(["--action-id", str(action_id)]) == 0
     assert dispatch.call_args.kwargs["action_id"] == action_id
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+psycopg://u:p@localhost:invalid/db",
+        "postgresql+psycopg://u:p@localhost/db?host=remote.example.com",
+        "postgresql+psycopg://u:p@localhost/db?hostaddr=10.0.0.1",
+        "postgresql+psycopg://u:p@localhost/db?service=production",
+    ],
+)
+def test_cli_rejects_invalid_or_overridden_database_targets(monkeypatch, url):
+    monkeypatch.setenv("APPLICATIONOS_ENABLE_SYNTHETIC_WORKER", "local-only")
+    monkeypatch.setenv("DATABASE_URL", url)
+    with pytest.raises(SystemExit) as error:
+        synthetic_cli.main([])
+    assert error.value.code == 2
