@@ -132,6 +132,39 @@ def main():
         else:
             raise AssertionError("Rejected workflow was reset to review")
         boundary_result = "approved and rejected synthetic decisions, stopped before execution"
+        # Optional disposable-database execution path. Never run without both
+        # a local reviewer credential and an explicit synthetic-only opt-in.
+        if os.getenv("APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION") == "local-only":
+            from sqlalchemy.engine import make_url
+
+            database_url = os.getenv("DATABASE_URL", "")
+            parsed_db = make_url(database_url)
+            if (
+                parsed_db.drivername != "postgresql+psycopg"
+                or parsed_db.host not in {"localhost", "127.0.0.1", "::1", "postgres"}
+                or any(k.lower() in {"host", "hostaddr", "service"} for k in parsed_db.query)
+            ):
+                raise ValueError("Synthetic smoke execution requires explicitly local PostgreSQL")
+            from app.persistence import (
+                SyntheticReceiptRow, WorkflowOutboxRepository, WorkflowRepository,
+                build_session_factory,
+            )
+            from app.synthetic_worker import dispatch_one_synthetic
+
+            factory = build_session_factory(database_url)
+            with factory.begin() as session:
+                repository = WorkflowRepository(session)
+                claimed = repository.claim_ready(__import__("uuid").UUID(action_id))
+                assert claimed.status.value == "running"
+                WorkflowOutboxRepository(session).enqueue_claimed(claimed.action_id)
+            receipt = dispatch_one_synthetic(factory, action_id=__import__("uuid").UUID(action_id))
+            assert receipt is not None and receipt.action_id == __import__("uuid").UUID(action_id)
+            assert dispatch_one_synthetic(factory, action_id=receipt.action_id) is None
+            with factory.begin() as session:
+                assert session.get(SyntheticReceiptRow, receipt.action_id) is not None
+            assert request("GET", "/v1/workflows/" + action_id)["status"] == "succeeded"
+            assert request("GET", "/v1/workflows/" + rejected_action_id)["status"] == "failed"
+            boundary_result = "approved synthetic no-op completed once; rejected action never dispatched"
     else:
         boundary_result = "stopped before approval or execution"
     print(json.dumps({
