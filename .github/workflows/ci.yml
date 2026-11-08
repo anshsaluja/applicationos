@@ -61,6 +61,35 @@ jobs:
           PY
       - name: Test
         run: pytest -q
+      - name: HTTP document-to-review integration smoke (real PostgreSQL)
+        run: |
+          set -Eeuo pipefail
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/applicationos-api-smoke.log 2>&1 &
+          api_pid=$!
+          cleanup() {
+            kill "$api_pid" 2>/dev/null || true
+            wait "$api_pid" 2>/dev/null || true
+            if [ -f /tmp/applicationos-api-smoke.log ]; then
+              tail -n 80 /tmp/applicationos-api-smoke.log
+            fi
+          }
+          trap cleanup EXIT
+          python - <<'PY'
+          import time
+          import urllib.error
+          import urllib.request
+
+          for attempt in range(60):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2) as response:
+                      if response.status == 200:
+                          break
+              except (urllib.error.URLError, TimeoutError):
+                  time.sleep(1)
+          else:
+              raise SystemExit("FastAPI did not become healthy within 60 seconds")
+          PY
+          APPLICATIONOS_SMOKE_API_URL=http://127.0.0.1:8000 python ../../scripts/smoke_local_journey.py
       - name: Enforce lint gate
         if: always()
         run: |
