@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: applicationos
       POSTGRES_PASSWORD: applicationos
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,7 +24,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://applicationos:applicationos@postgres:5432/applicationos
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
