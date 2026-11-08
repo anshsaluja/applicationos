@@ -61,12 +61,13 @@ jobs:
           PY
       - name: Test
         run: pytest -q
-      - name: HTTP document-to-approval integration smoke (real PostgreSQL)
+      - name: HTTP document-to-synthetic-completion smoke (real PostgreSQL)
         env:
           # Disposable test-only credential; not a production secret or deployment setting.
           APPLICATIONOS_REVIEW_TOKEN: ci-synthetic-review-token-not-for-deployment
           APPLICATIONOS_REVIEWER_ID: ci-synthetic-reviewer
           APPLICATIONOS_SMOKE_REVIEW_TOKEN: ci-synthetic-review-token-not-for-deployment
+          APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION: local-only
         run: |
           set -Eeuo pipefail
           uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/applicationos-api-smoke.log 2>&1 &
