@@ -96,7 +96,42 @@ def main():
         approved = request("POST", decision_path, decision_body, extra_headers={"X-Review-Token": token})
         assert approved["status"] == "ready", "Approved workflow did not become ready"
         assert request("GET", "/v1/workflows/" + action_id)["status"] == "ready"
-        boundary_result = "approved, stopped before execution"
+        # A signed decision is single-use: a replay must not overwrite the
+        # approval record or change an already-approved workflow.
+        try:
+            request("POST", decision_path, decision_body, extra_headers={"X-Review-Token": token})
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 409, f"Approval replay returned {exc.code}, expected 409"
+        else:
+            raise AssertionError("Approval replay unexpectedly succeeded")
+        assert request("GET", "/v1/workflows/" + action_id)["status"] == "ready"
+
+        # Exercise rejection independently, using a second synthetic action.
+        rejected_action_id = str(uuid4())
+        rejected_workflow = request("POST", "/v1/workflows", json.dumps({
+            "action_id": rejected_action_id,
+            "idempotency_key": "smoke-reject-" + rejected_action_id,
+        }).encode())
+        assert rejected_workflow["status"] == "pending"
+        rejected_review = request(
+            "POST", "/v1/workflows/" + rejected_action_id + "/request-review", b"{}"
+        )
+        assert rejected_review["status"] == "awaiting_approval"
+        rejected = request(
+            "POST", "/v1/workflows/" + rejected_action_id + "/decision",
+            json.dumps({"decision": "rejected", "reason": "Synthetic rejection test"}).encode(),
+            extra_headers={"X-Review-Token": token},
+        )
+        assert rejected["status"] == "failed"
+        assert request("GET", "/v1/workflows/" + rejected_action_id)["status"] == "failed"
+        # Rejected workflows cannot be reset into review.
+        try:
+            request("POST", "/v1/workflows/" + rejected_action_id + "/request-review", b"{}")
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 409, f"Rejected workflow reset returned {exc.code}, expected 409"
+        else:
+            raise AssertionError("Rejected workflow was reset to review")
+        boundary_result = "approved and rejected synthetic decisions, stopped before execution"
     else:
         boundary_result = "stopped before approval or execution"
     print(json.dumps({
