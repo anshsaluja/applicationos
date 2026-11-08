@@ -1,5 +1,7 @@
 from uuid import uuid4
 
+import pytest
+
 from app.domain.evaluator import evaluate_requirements
 from app.domain.models import Evidence, Requirement, RequirementStatus
 
@@ -89,3 +91,16 @@ def test_unknown_dependency_blocks_even_with_evidence() -> None:
     )
     result = evaluate_requirements([requirement])
     assert result.requirements[0].status == RequirementStatus.BLOCKED
+
+
+def test_duplicate_requirement_identity_fails_closed() -> None:
+    original = Requirement(
+        title="Identity", description="Identity", evidence=[evidence("id", "valid")]
+    )
+    conflicting = Requirement(
+        id=original.id, title="Conflicting identity", description="No evidence"
+    )
+    with pytest.raises(ValueError, match="Duplicate requirement identifiers"):
+        evaluate_requirements([original, conflicting])
+    with pytest.raises(ValueError, match="Duplicate requirement identifiers"):
+        evaluate_requirements([conflicting, original])
