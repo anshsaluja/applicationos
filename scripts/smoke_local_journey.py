@@ -36,10 +36,11 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 opener = urllib.request.build_opener(NoRedirect)
 
 
-def request(method, path, body=None, content_type="application/json"):
+def request(method, path, body=None, content_type="application/json", extra_headers=None):
     headers = {}
     if body is not None:
         headers["Content-Type"] = content_type
+    headers.update(extra_headers or {})
     req = urllib.request.Request(BASE + path, data=body, headers=headers, method=method)
     with opener.open(req, timeout=15) as response:
         return json.load(response)
@@ -80,11 +81,29 @@ def main():
     review = request("POST", "/v1/workflows/" + action_id + "/request-review", b"{}")
     assert review["status"] == "awaiting_approval"
     assert request("GET", "/v1/workflows/" + action_id)["status"] == "awaiting_approval"
+    # Opt-in approval path: only for disposable local/CI environments with a configured reviewer.
+    # Never log the token, and never dispatch any external or synthetic action here.
+    token = os.getenv("APPLICATIONOS_SMOKE_REVIEW_TOKEN", "")
+    if token:
+        decision_path = "/v1/workflows/" + action_id + "/decision"
+        decision_body = json.dumps({"decision": "approved", "reason": "Synthetic CI review"}).encode()
+        try:
+            request("POST", decision_path, decision_body)
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 403, f"Unauthenticated approval returned {exc.code}, expected 403"
+        else:
+            raise AssertionError("Unauthenticated approval unexpectedly succeeded")
+        approved = request("POST", decision_path, decision_body, extra_headers={"X-Review-Token": token})
+        assert approved["status"] == "ready", "Approved workflow did not become ready"
+        assert request("GET", "/v1/workflows/" + action_id)["status"] == "ready"
+        boundary_result = "approved, stopped before execution"
+    else:
+        boundary_result = "stopped before approval or execution"
     print(json.dumps({
         "result": "PASS", "document_id": document["id"],
         "requirement_count": len(stored["requirements"]),
         "workspace_id": stored["workspace_id"], "workflow_id": action_id,
-        "boundary": "stopped before approval or execution"
+        "boundary": boundary_result
     }, indent=2))
 
 
