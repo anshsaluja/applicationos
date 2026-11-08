@@ -4,6 +4,7 @@
 Requires the Compose API and database to be running. Uses synthetic instructions
 and never approves or dispatches an action.
 """
+import hashlib
 import json
 import os
 import sys
@@ -60,7 +61,8 @@ def main():
         "Content-Type: text/plain\r\n\r\n"
     ).encode() + synthetic + f"\r\n--{boundary}--\r\n".encode()
     document = request("POST", "/v1/documents", payload, f"multipart/form-data; boundary={boundary}")
-    assert document["id"] and document["sha256"]
+    assert document["id"]
+    assert document["sha256"] == hashlib.sha256(synthetic).hexdigest(), "Uploaded bytes digest mismatch"
     fetched = request("GET", "/v1/documents/" + document["id"])
     assert fetched["sha256"] == document["sha256"]
     sources = request("GET", "/v1/documents/" + document["id"] + "/requirement-sources")
