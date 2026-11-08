@@ -78,12 +78,30 @@ def main():
         "action_id": action_id, "idempotency_key": "smoke-" + action_id
     }).encode())
     assert workflow["action_id"] == action_id
+    # Repeating the same intent must reuse the durable checkpoint.
+    replay = request("POST", "/v1/workflows", json.dumps({
+        "action_id": action_id, "idempotency_key": "smoke-" + action_id
+    }).encode())
+    assert replay["action_id"] == action_id
+    assert replay["idempotency_key"] == workflow["idempotency_key"]
+    assert replay["status"] == "pending"
+    # Reusing an idempotency key for a different action must fail closed.
+    try:
+        request("POST", "/v1/workflows", json.dumps({
+            "action_id": str(uuid4()), "idempotency_key": "smoke-" + action_id
+        }).encode())
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 409, f"Conflicting idempotency key returned {exc.code}"
+    else:
+        raise AssertionError("Conflicting idempotency key was accepted")
     review = request("POST", "/v1/workflows/" + action_id + "/request-review", b"{}")
     assert review["status"] == "awaiting_approval"
     assert request("GET", "/v1/workflows/" + action_id)["status"] == "awaiting_approval"
     # Opt-in approval path: only for disposable local/CI environments with a configured reviewer.
     # Never log the token, and never dispatch any external or synthetic action here.
     token = os.getenv("APPLICATIONOS_SMOKE_REVIEW_TOKEN", "")
+    if os.getenv("APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION") == "local-only" and not token:
+        raise AssertionError("Synthetic execution was requested without an approval test token")
     if token:
         decision_path = "/v1/workflows/" + action_id + "/decision"
         decision_body = json.dumps({"decision": "approved", "reason": "Synthetic CI review"}).encode()
