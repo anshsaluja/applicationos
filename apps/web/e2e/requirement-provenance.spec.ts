@@ -55,5 +55,5 @@ test("provenance lookup failure remains visible without losing saved requirement
   });
   await page.getByRole("button", { name: "Extract and save requirements" }).click();
   await expect(page.getByRole("heading", { name: "Saved requirements (0)" })).toBeVisible();
-  await expect(page.getByRole("alert", { name: /Source excerpts could not be loaded/ })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Source excerpts could not be loaded" })).toBeVisible();
 });
