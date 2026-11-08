@@ -141,3 +141,41 @@ def test_synthetic_confirmation_rolls_back_receipt_and_status_together(factory):
         )
         assert row.status == "quarantined"
     assert dispatch_one_synthetic(factory, action_id=action_id) is None
+
+
+
+def test_worker_crash_after_claim_never_replays_automatically(factory, monkeypatch):
+    """A crash at the claim/confirm boundary leaves a recoverable, non-replayable intent."""
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        WorkflowOutboxRepository(session).enqueue_claimed(action_id)
+
+    original = WorkflowOutboxRepository.mark_dispatched
+
+    def interrupted_confirmation(self, *args, **kwargs):
+        raise RuntimeError("simulated worker crash")
+
+    monkeypatch.setattr(WorkflowOutboxRepository, "mark_dispatched", interrupted_confirmation)
+    with pytest.raises(RuntimeError, match="simulated worker crash"):
+        dispatch_one_synthetic(factory, action_id=action_id)
+    monkeypatch.setattr(WorkflowOutboxRepository, "mark_dispatched", original)
+
+    with factory.begin() as session:
+        assert session.get(WorkflowOutboxRow, action_id).status == "claimed"
+        assert session.get(WorkflowRow, action_id).status == WorkflowStatus.RUNNING.value
+        assert session.get(SyntheticReceiptRow, action_id) is None
+
+    # A second worker cannot silently retry an intent whose first execution is uncertain.
+    assert dispatch_one_synthetic(factory, action_id=action_id) is None
+    with factory.begin() as session:
+        outbox = WorkflowOutboxRepository(session)
+        assert outbox.quarantine_interrupted_claim(
+            action_id, reason="operator reconciled interrupted synthetic execution"
+        ).status == "quarantined"
+        assert session.get(SyntheticReceiptRow, action_id) is None
