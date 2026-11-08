@@ -38,6 +38,10 @@ test("workflow inspector displays persisted checkpoint and clears stale results"
   await expect(page.getByText("review:demo")).toBeVisible();
 
   await page.getByLabel("Action UUID").fill("bad");
+  // Identity changes must hide the prior checkpoint and operator approval form immediately.
+  await expect(page.getByText("awaiting approval")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Operator review" })).toHaveCount(0);
+  await expect(page.getByText("review:demo")).toHaveCount(0);
   await page.getByRole("button", { name: "Check status" }).click();
   await expect(page.locator('p[role="alert"]')).toContainText("Enter a valid action UUID.");
   await expect(page.getByText("awaiting approval")).toHaveCount(0);
