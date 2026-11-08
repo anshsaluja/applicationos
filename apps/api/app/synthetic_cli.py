@@ -35,8 +35,18 @@ def main(argv: list[str] | None = None) -> int:
     # Avoid accidental writes to cloud PostgreSQL; remote hosts require a
     # separate deliberate operator workflow, which this CLI does not support.
     from sqlalchemy.engine import make_url
+    from sqlalchemy.exc import ArgumentError
 
-    host = make_url(url).host
+    try:
+        parsed = make_url(url)
+        host = parsed.host
+        _ = parsed.port
+    except (ArgumentError, ValueError):
+        parser.error("DATABASE_URL is not a valid PostgreSQL connection URL")
+    # libpq query parameters can override the URL hostname. Refuse all
+    # connection-routing overrides, even when the visible host is local.
+    if any(key.lower() in {"host", "hostaddr", "service"} for key in parsed.query):
+        parser.error("DATABASE_URL must not override its connection host")
     if host not in {"localhost", "127.0.0.1", "::1", "postgres"}:
         parser.error("Synthetic worker only accepts localhost or Docker postgres host")
     factory = build_session_factory(url)
