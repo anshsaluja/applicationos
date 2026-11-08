@@ -4,6 +4,7 @@ import { useState } from "react";
 
 type Requirement = { id: string; title: string; description: string; status: string; evidence: unknown[] };
 type Result = { workspace_id: string; requirements: Requirement[] };
+type RequirementSource = { requirement_id: string; instruction_excerpt: string; source_document_id: string; source_label: string; status: string; satisfaction_evidence: string[] };
 type WorkflowCheckpoint = { action_id: string; status: string; attempt: number; max_attempts: number; idempotency_key: string; last_error: string | null };
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -20,6 +21,8 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [documentId, setDocumentId] = useState("");
+  const [requirementSources, setRequirementSources] = useState<RequirementSource[]>([]);
+  const [sourceError, setSourceError] = useState("");
   const [workspaceLookup, setWorkspaceLookup] = useState("");
   const [workflowId, setWorkflowId] = useState("");
   const [workflow, setWorkflow] = useState<WorkflowCheckpoint | null>(null);
@@ -40,7 +43,7 @@ export default function Home() {
   async function processDocument(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!file || busy) return;
-    setBusy(true); setError(""); setResult(null);
+    setBusy(true); setError(""); setResult(null); setRequirementSources([]); setSourceError("");
     try {
       const body = new FormData();
       body.append("file", file);
@@ -49,6 +52,12 @@ export default function Home() {
       const persisted = await responseJson<Result>(await fetch(`${API}/v1/documents/${uploaded.id}/requirements/persist`, { method: "POST" }));
       setResult(persisted);
       setWorkspaceLookup(persisted.workspace_id);
+      try {
+        const sources = await responseJson<RequirementSource[]>(await fetch(`${API}/v1/documents/${encodeURIComponent(uploaded.id)}/requirement-sources`, { cache: "no-store" }));
+        setRequirementSources(sources);
+      } catch {
+        setSourceError("Source excerpts could not be loaded. Requirements are saved, but verify provenance before relying on them.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error");
     } finally { setBusy(false); }
@@ -61,7 +70,7 @@ export default function Home() {
       setError("Enter a valid workspace UUID.");
       return;
     }
-    setBusy(true); setError(""); setResult(null); setDocumentId("");
+    setBusy(true); setError(""); setResult(null); setDocumentId(""); setRequirementSources([]); setSourceError("");
     try {
       const saved = await responseJson<Result>(await fetch(`${API}/v1/workspaces/${encodeURIComponent(id)}/requirements`, { cache: "no-store" }));
       setResult(saved);
@@ -243,11 +252,20 @@ export default function Home() {
           <p>Workspace: <code>{result.workspace_id}</code></p>
           {documentId && <p>Source document: <code>{documentId}</code></p>}
           <p>Save this workspace ID to resume reviewing it later.</p>
+          {sourceError && <p role="alert">{sourceError}</p>}
+          <p>Instruction excerpts are source provenance, not evidence that a requirement has been satisfied.</p>
           {result.requirements.length === 0 && <p>No explicit requirements detected. Review the document manually.</p>}
           <ul>{result.requirements.map((item) => (
             <li key={item.id} style={{ marginBottom: "1rem" }}>
               <strong>{item.title}</strong> — {item.status}
               <div>{item.description}</div>
+              {requirementSources.filter((source) => source.requirement_id === item.id).map((source) => (
+                <div key={`${source.requirement_id}:${source.source_document_id}`} style={{ padding: "0.75rem", marginTop: "0.5rem", background: "#f1f5f9", borderLeft: "3px solid #64748b" }}>
+                  <strong>Source: {source.source_label}</strong>
+                  <blockquote style={{ margin: "0.5rem 0", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{source.instruction_excerpt}</blockquote>
+                  <small>Source document: {source.source_document_id}. Satisfaction evidence: {source.satisfaction_evidence.length} item(s).</small>
+                </div>
+              ))}
               <small>Compliance evidence: {item.evidence.length} item(s). No automatic satisfaction claims.</small>
             </li>
           ))}</ul>
