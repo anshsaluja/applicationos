@@ -20,6 +20,10 @@ def evaluate_requirements(requirements: list[Requirement]) -> EvaluationResult:
     without evidence are missing. A dependency that is not satisfied blocks its dependents.
     """
     by_id = {requirement.id: requirement for requirement in requirements}
+    if len(by_id) != len(requirements):
+        # Duplicate identities make dependency resolution ambiguous; never
+        # silently select the last record and mark the graph satisfied.
+        raise ValueError("Duplicate requirement identifiers in evaluation graph")
     resolved: dict = {}
     visiting: set = set()
 
