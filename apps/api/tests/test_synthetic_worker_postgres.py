@@ -16,8 +16,8 @@ from app.persistence import (
     SyntheticReceiptRow,
     WorkflowOutboxRepository,
     WorkflowOutboxRow,
-    WorkflowRow,
     WorkflowRepository,
+    WorkflowRow,
 )
 from app.synthetic_worker import dispatch_one_synthetic
 
