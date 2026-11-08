@@ -13,8 +13,27 @@ import urllib.request
 from uuid import uuid4
 
 BASE = os.getenv("APPLICATIONOS_SMOKE_API_URL", "http://127.0.0.1:8000").rstrip("/")
-if urllib.parse.urlsplit(BASE).hostname not in {"127.0.0.1", "localhost", "::1"}:
-    raise SystemExit("Refusing non-local smoke test target")
+target = urllib.parse.urlsplit(BASE)
+if (
+    target.scheme != "http"
+    or target.hostname not in {"127.0.0.1", "localhost", "::1"}
+    or target.username is not None
+    or target.password is not None
+    or target.path not in {"", "/"}
+    or target.query
+    or target.fragment
+):
+    raise SystemExit("Refusing unsafe or non-local smoke test target")
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow server-controlled redirects outside the local API."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, "Redirect refused", headers, fp)
+
+
+opener = urllib.request.build_opener(NoRedirect)
 
 
 def request(method, path, body=None, content_type="application/json"):
@@ -22,7 +41,7 @@ def request(method, path, body=None, content_type="application/json"):
     if body is not None:
         headers["Content-Type"] = content_type
     req = urllib.request.Request(BASE + path, data=body, headers=headers, method=method)
-    with urllib.request.urlopen(req, timeout=15) as response:
+    with opener.open(req, timeout=15) as response:
         return json.load(response)
 
 
