@@ -207,7 +207,7 @@ export default function Home() {
         <form onSubmit={loadWorkflow}>
           <label htmlFor="workflow-id">Action UUID</label>
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-            <input id="workflow-id" value={workflowId} onChange={(e) => setWorkflowId(e.target.value)} placeholder="Action UUID" style={{ flex: 1, minWidth: 0 }} />
+            <input id="workflow-id" value={workflowId} onChange={(e) => { setWorkflowId(e.target.value); setWorkflow(null); setWorkflowError(""); setWorkflowNotice(""); }} placeholder="Action UUID" style={{ flex: 1, minWidth: 0 }} />
             <button type="submit" disabled={workflowBusy || !workflowId.trim()}>{workflowBusy ? "Loading…" : "Check status"}</button>
           </div>
         </form>
