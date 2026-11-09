@@ -121,3 +121,52 @@ def test_requirement_evaluation_accepts_maximum_batch() -> None:
     )
     assert response.status_code == 200
     assert len(response.json()["requirements"]) == 100
+
+
+def test_cors_origin_configuration_rejects_wildcards_paths_and_credentials() -> None:
+    import pytest
+
+    from app.main import parse_cors_origins
+
+    for unsafe in (
+        "*",
+        "https://*.example.com",
+        "https://example.com/path",
+        "https://example.com?debug=true",
+        "https://user:password@example.com",
+        "file:///tmp",
+        "https://example.com:99999",
+        "https://example.com:0",
+    ):
+        with pytest.raises(ValueError):
+            parse_cors_origins(unsafe)
+
+
+def test_cors_origin_configuration_normalizes_and_deduplicates() -> None:
+    from app.main import parse_cors_origins
+
+    assert parse_cors_origins(
+        " https://example.com/, http://localhost:3000, https://example.com "
+    ) == ["https://example.com", "http://localhost:3000"]
+
+
+def test_cors_preflight_only_allows_configured_origin() -> None:
+    allowed = client.options(
+        "/v1/requirements/evaluate",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert allowed.status_code == 200
+    assert allowed.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+    denied = client.options(
+        "/v1/requirements/evaluate",
+        headers={
+            "Origin": "https://untrusted.example",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert denied.status_code == 400
+    assert "access-control-allow-origin" not in denied.headers
