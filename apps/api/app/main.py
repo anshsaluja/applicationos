@@ -7,9 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from sqlalchemy import text as sql_text
 
-from .persistence import build_engine
-
 from .api import router
+from .persistence import build_engine
 
 app = FastAPI(
     title="ApplicationOS API",
