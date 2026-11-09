@@ -17,6 +17,14 @@ CLAUSE = re.compile(
 SENTENCE = re.compile(r"[^.!?\n]+(?:[.!?]|$)")
 
 
+# Explicit waivers are not requirements. Keep this conservative: ambiguous
+# clauses still become pending review candidates rather than being inferred.
+WAIVER = re.compile(
+    r"\b(?:not\s+required\s+to|not\s+necessary\s+to|"
+    r"(?:do|does)\s+not\s+need\s+to|no\s+need\s+to|need\s+not)\b",
+    re.IGNORECASE,
+)
+
 def extract_requirements(document_id: UUID, filename: str, text: str) -> list[Requirement]:
     """Extract only explicitly stated obligations; return pending review candidates."""
     results: list[Requirement] = []
@@ -24,7 +32,7 @@ def extract_requirements(document_id: UUID, filename: str, text: str) -> list[Re
     for match in SENTENCE.finditer(text):
         excerpt = match.group().strip()
         normalized = " ".join(excerpt.casefold().split()).rstrip(".!?")
-        if not excerpt or not CLAUSE.search(excerpt) or normalized in seen:
+        if not excerpt or not CLAUSE.search(excerpt) or WAIVER.search(excerpt) or normalized in seen:
             continue
         seen.add(normalized)
         # Evidence here proves the *instruction exists*, not that it is satisfied.
