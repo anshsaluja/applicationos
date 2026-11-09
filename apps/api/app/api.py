@@ -185,6 +185,27 @@ def get_workflow_checkpoint(action_id: UUID) -> WorkflowCheckpointResponse:
         return WorkflowCheckpointResponse(**state.model_dump())
 
 
+def requires_dispatch_reconciliation(
+    workflow_status: str, outbox_status: str | None, receipt_valid: bool
+) -> bool:
+    """Fail closed on contradictory durable execution state.
+
+    A succeeded workflow without a matching receipt is never trusted. A
+    running workflow with no outbox cannot safely be resumed automatically.
+    """
+    if workflow_status == "succeeded" and (outbox_status != "dispatched" or not receipt_valid):
+        return True
+    if workflow_status == "running" and outbox_status is None:
+        return True
+    if outbox_status in {"claimed", "quarantined"}:
+        return True
+    if outbox_status == "dispatched" and not receipt_valid:
+        return True
+    if outbox_status == "dispatched" and workflow_status not in {"running", "succeeded"}:
+        return True
+    return False
+
+
 class WorkflowDispatchStatusResponse(BaseModel):
     """Read-only reconciliation view; an outbox intent is not proof of execution."""
 
@@ -227,10 +248,8 @@ def get_workflow_dispatch_status(action_id: UUID) -> WorkflowDispatchStatusRespo
             and outbox.idempotency_key == state.idempotency_key
         )
         outbox_status = outbox.status if outbox is not None else None
-        # Claimed/quarantined intents need operator reconciliation; a dispatched
-        # intent without matching proof is also unsafe to treat as completed.
-        needs_reconciliation = outbox_status in {"claimed", "quarantined"} or (
-            outbox_status == "dispatched" and not receipt_valid
+        needs_reconciliation = requires_dispatch_reconciliation(
+            state.status.value, outbox_status, receipt_valid
         )
         return WorkflowDispatchStatusResponse(
             action_id=action_id,
