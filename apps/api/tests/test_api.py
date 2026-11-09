@@ -192,3 +192,35 @@ def test_workflow_idempotency_key_preserves_valid_internal_spaces() -> None:
     key = "case 123: step 2"
     payload = WorkflowCreateRequest(action_id=uuid4(), idempotency_key=key)
     assert payload.idempotency_key == key
+
+
+def test_dispatch_reconciliation_flags_inconsistent_persisted_state() -> None:
+    """Never report a succeeded workflow as safe without its durable receipt."""
+    from app.api import requires_dispatch_reconciliation
+
+    for workflow, outbox, receipt in (
+        ("succeeded", None, False),
+        ("succeeded", "pending", False),
+        ("succeeded", "dispatched", False),
+        ("running", None, False),
+        ("running", "claimed", False),
+        ("failed", "dispatched", True),
+        ("ready", "dispatched", True),
+        ("running", "quarantined", False),
+    ):
+        assert requires_dispatch_reconciliation(workflow, outbox, receipt)
+
+
+def test_dispatch_reconciliation_allows_consistent_checkpoints() -> None:
+    from app.api import requires_dispatch_reconciliation
+
+    for workflow, outbox, receipt in (
+        ("pending", None, False),
+        ("awaiting_approval", None, False),
+        ("ready", None, False),
+        ("running", "pending", False),
+        ("running", "dispatched", True),
+        ("succeeded", "dispatched", True),
+        ("failed", None, False),
+    ):
+        assert not requires_dispatch_reconciliation(workflow, outbox, receipt)
