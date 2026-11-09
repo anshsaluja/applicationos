@@ -179,3 +179,36 @@ def test_worker_crash_after_claim_never_replays_automatically(factory, monkeypat
             action_id, reason="operator reconciled interrupted synthetic execution"
         ).status == "quarantined"
         assert session.get(SyntheticReceiptRow, action_id) is None
+
+
+def test_stale_first_intent_does_not_starve_later_approved_work(factory):
+    """The worker must quarantine an invalid oldest intent and process the next."""
+    stale_id, valid_id = uuid4(), uuid4()
+    for action_id in (stale_id, valid_id):
+        with factory.begin() as session:
+            workflow = WorkflowRepository(session)
+            workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+            workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+            ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+            workflow.advance(action_id, WorkflowStatus.READY)
+            workflow.claim_ready(action_id)
+            WorkflowOutboxRepository(session).enqueue_claimed(action_id)
+
+    # Make ordering deterministic, independent of timestamp precision.
+    from datetime import UTC, datetime, timedelta
+    with factory.begin() as session:
+        session.get(WorkflowOutboxRow, stale_id).created_at = datetime.now(UTC) - timedelta(days=1)
+        session.get(WorkflowOutboxRow, valid_id).created_at = datetime.now(UTC)
+        from app.persistence import ApprovalRow
+        session.get(ApprovalRow, stale_id).status = "rejected"
+
+    receipt = dispatch_one_synthetic(factory)
+    assert receipt is not None
+    assert receipt.action_id == valid_id
+    with factory.begin() as session:
+        assert session.get(WorkflowOutboxRow, stale_id).status == "quarantined"
+        assert session.get(SyntheticReceiptRow, stale_id) is None
+        assert session.get(WorkflowRow, stale_id).status == WorkflowStatus.RUNNING.value
+        assert session.get(WorkflowOutboxRow, valid_id).status == "dispatched"
+        assert session.get(WorkflowRow, valid_id).status == WorkflowStatus.SUCCEEDED.value
+    assert dispatch_one_synthetic(factory) is None
