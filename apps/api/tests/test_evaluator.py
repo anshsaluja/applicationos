@@ -6,8 +6,8 @@ from app.domain.evaluator import evaluate_requirements
 from app.domain.models import Evidence, Requirement, RequirementStatus
 
 
-def evidence(label: str, excerpt: str) -> Evidence:
-    return Evidence(source_document_id=uuid4(), source_label=label, excerpt=excerpt)
+def evidence(label: str, excerpt: str, document_id=None) -> Evidence:
+    return Evidence(source_document_id=document_id or uuid4(), source_label=label, excerpt=excerpt)
 
 
 def test_requirement_without_evidence_is_missing() -> None:
@@ -26,10 +26,11 @@ def test_requirement_with_evidence_is_satisfied() -> None:
 
 
 def test_conflicting_evidence_is_inconsistent() -> None:
+    document_id = uuid4()
     requirement = Requirement(
         title="Income",
         description="Provide income",
-        evidence=[evidence("income", "$80,000"), evidence("income", "$95,000")],
+        evidence=[evidence("income", "$80,000", document_id), evidence("income", "$95,000", document_id)],
     )
     result = evaluate_requirements([requirement])
     assert result.requirements[0].status == RequirementStatus.INCONSISTENT
@@ -104,3 +105,26 @@ def test_duplicate_requirement_identity_fails_closed() -> None:
         evaluate_requirements([original, conflicting])
     with pytest.raises(ValueError, match="Duplicate requirement identifiers"):
         evaluate_requirements([conflicting, original])
+
+
+def test_same_label_in_distinct_documents_does_not_imply_conflict() -> None:
+    requirement = Requirement(
+        title="Income",
+        description="Provide income",
+        evidence=[evidence("income", "$80,000"), evidence("income", "$95,000")],
+    )
+    result = evaluate_requirements([requirement])
+    assert result.requirements[0].status == RequirementStatus.SATISFIED
+    assert result.inconsistent_count == 0
+
+
+def test_source_label_whitespace_is_normalized_for_conflict_detection() -> None:
+    document_id = uuid4()
+    requirement = Requirement(
+        title="Income",
+        description="Provide income",
+        evidence=[evidence("Income  Statement", "$80,000", document_id),
+                  evidence(" income statement ", "$95,000", document_id)],
+    )
+    result = evaluate_requirements([requirement])
+    assert result.requirements[0].status == RequirementStatus.INCONSISTENT
