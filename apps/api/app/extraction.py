@@ -25,6 +25,7 @@ WAIVER = re.compile(
     re.IGNORECASE,
 )
 
+
 def extract_requirements(document_id: UUID, filename: str, text: str) -> list[Requirement]:
     """Extract only explicitly stated obligations; return pending review candidates."""
     results: list[Requirement] = []
