@@ -67,3 +67,36 @@ def test_validation_errors_have_request_ids() -> None:
 
     assert response.status_code == 422
     assert str(UUID(response.headers["x-request-id"])) == response.headers["x-request-id"]
+
+
+def test_review_decision_fails_closed_without_operator_configuration(monkeypatch) -> None:
+    """No workflow lookup or state mutation is allowed without an operator gate."""
+    from uuid import uuid4
+
+    monkeypatch.delenv("APPLICATIONOS_REVIEW_TOKEN", raising=False)
+    monkeypatch.delenv("APPLICATIONOS_REVIEWER_ID", raising=False)
+    action_id = uuid4()
+    for decision in ("approved", "rejected"):
+        response = client.post(
+            f"/v1/workflows/{action_id}/decision",
+            json={"decision": decision},
+            headers={"X-Review-Token": "untrusted"},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Review authorization unavailable or denied"
+        assert response.headers["cache-control"] == "no-store"
+
+
+def test_review_decision_rejects_incorrect_token_before_database_access(monkeypatch) -> None:
+    """Wrong credentials cannot learn whether a workflow exists."""
+    from uuid import uuid4
+
+    monkeypatch.setenv("APPLICATIONOS_REVIEW_TOKEN", "local-test-secret")
+    monkeypatch.setenv("APPLICATIONOS_REVIEWER_ID", "local-reviewer")
+    response = client.post(
+        f"/v1/workflows/{uuid4()}/decision",
+        json={"decision": "approved"},
+        headers={"X-Review-Token": "wrong-secret"},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Review authorization unavailable or denied"
