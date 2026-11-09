@@ -49,7 +49,7 @@ def test_recovery_refuses_confirmed_dispatch():
 
 
 def test_recovery_without_outbox_fails_checkpoint_only():
-    repository, workflow, _, session, action_id = make_repository(None)
+    repository, _workflow, _, session, action_id = make_repository(None)
     result = repository.recover_interrupted(action_id)
     assert result.status.value == "failed"
     session.flush.assert_called_once()
