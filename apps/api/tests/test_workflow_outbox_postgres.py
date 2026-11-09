@@ -201,3 +201,44 @@ def test_dispatch_confirmation_rechecks_persisted_approval(factory):
         with pytest.raises(WorkflowTransitionError, match="approval changed"):
             outbox.mark_dispatched(action_id)
         assert session.get(WorkflowOutboxRow, action_id).status == "claimed"
+
+
+
+def test_synthetic_worker_crash_after_claim_never_replays(factory, monkeypatch):
+    """A failed acknowledgement must leave a durable claimed intent for review."""
+    from app.synthetic_worker import dispatch_one_synthetic
+
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        WorkflowOutboxRepository(session).enqueue_claimed(action_id)
+
+    def crash_before_confirmation(self, action_id, *, synthetic_receipt=False):
+        raise RuntimeError("simulated crash after durable claim")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(WorkflowOutboxRepository, "mark_dispatched", crash_before_confirmation)
+        with pytest.raises(RuntimeError, match="simulated crash"):
+            dispatch_one_synthetic(factory, action_id=action_id)
+
+    with factory.begin() as session:
+        assert session.get(WorkflowOutboxRow, action_id).status == "claimed"
+        assert WorkflowRepository(session).get(action_id).status == WorkflowStatus.RUNNING
+
+    # A restarted worker must not pick up an already-claimed intent.
+    assert dispatch_one_synthetic(factory, action_id=action_id) is None
+    with factory.begin() as session:
+        outbox = WorkflowOutboxRepository(session)
+        assert outbox.quarantine_interrupted_claim(
+            action_id, reason="worker stopped; effect status unknown"
+        ).status == "quarantined"
+
+    assert dispatch_one_synthetic(factory, action_id=action_id) is None
+    with factory.begin() as session:
+        assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
+        assert WorkflowRepository(session).get(action_id).status == WorkflowStatus.RUNNING
