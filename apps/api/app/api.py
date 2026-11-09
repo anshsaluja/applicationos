@@ -13,7 +13,7 @@ router = APIRouter(prefix="/v1")
 
 
 class EvaluateRequest(BaseModel):
-    requirements: list[Requirement]
+    requirements: list[Requirement] = Field(max_length=100)
 
 
 class EvaluateResponse(BaseModel):
