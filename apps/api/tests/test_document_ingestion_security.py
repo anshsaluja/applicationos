@@ -60,7 +60,7 @@ def test_filename_removes_invisible_direction_and_format_controls():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("payload", [b"hello\\x00world", b"hello\\x1b[31mworld", b"hello\\x08world"])
+@pytest.mark.parametrize("payload", [b"hello\x00world", b"hello\x1b[31mworld", b"hello\x08world"])
 async def test_reject_binary_and_terminal_control_characters(payload):
     upload = UploadFile(
         filename="instructions.txt",
@@ -79,10 +79,10 @@ async def test_reject_binary_and_terminal_control_characters(payload):
 async def test_allow_normal_text_layout_whitespace():
     upload = UploadFile(
         filename="instructions.txt",
-        file=BytesIO(b"First\\tcolumn\\r\\nSecond line\\n"),
+        file=BytesIO(b"First\tcolumn\r\nSecond line\n"),
         headers=__import__("starlette.datastructures", fromlist=["Headers"]).Headers(
             {"content-type": "text/plain"}
         ),
     )
     document = await ingest_upload(upload)
-    assert document.text == "First\\tcolumn\\r\\nSecond line"
+    assert document.text == "First\tcolumn\r\nSecond line"
