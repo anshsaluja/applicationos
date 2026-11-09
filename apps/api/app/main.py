@@ -1,4 +1,5 @@
 import os
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +38,8 @@ def health() -> dict[str, str]:
 async def harden_api_responses(request: Request, call_next) -> Response:
     """Prevent caching sensitive documents and workflow state in shared caches."""
     response = await call_next(request)
+    # Generate IDs server-side; never echo untrusted client-provided correlation values.
+    response.headers["X-Request-ID"] = str(uuid4())
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["X-Frame-Options"] = "DENY"
