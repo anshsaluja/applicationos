@@ -100,3 +100,24 @@ def test_review_decision_rejects_incorrect_token_before_database_access(monkeypa
     )
     assert response.status_code == 403
     assert response.json()["detail"] == "Review authorization unavailable or denied"
+
+
+def test_requirement_evaluation_rejects_oversized_batches_before_processing() -> None:
+    """Bound CPU and response size for untrusted requirement evaluation input."""
+    item = {"title": "ID", "description": "Provide identification", "evidence": []}
+    response = client.post(
+        "/v1/requirements/evaluate",
+        json={"requirements": [item] * 101},
+    )
+    assert response.status_code == 422
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_requirement_evaluation_accepts_maximum_batch() -> None:
+    item = {"title": "ID", "description": "Provide identification", "evidence": []}
+    response = client.post(
+        "/v1/requirements/evaluate",
+        json={"requirements": [item] * 100},
+    )
+    assert response.status_code == 200
+    assert len(response.json()["requirements"]) == 100
