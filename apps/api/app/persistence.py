@@ -642,6 +642,25 @@ class WorkflowRepository:
             return current  # Repeated recovery requests must not consume retries.
         if current.status != WorkflowStatus.RUNNING:
             raise WorkflowTransitionError("Only running workflows can be recovered")
+        # An interrupted worker may have claimed its transactional outbox intent.
+        # Quarantine that intent in the SAME transaction as the failed checkpoint:
+        # otherwise an orphaned pending/claimed intent could later be dispatched
+        # despite recovery having marked the workflow failed.
+        outbox = (
+            self.session.query(WorkflowOutboxRow)
+            .filter_by(action_id=action_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        if outbox is not None:
+            if outbox.status == "dispatched":
+                # A confirmed dispatch must be reconciled against its receipt,
+                # not rewritten as an interrupted attempt.
+                raise WorkflowTransitionError(
+                    "Dispatched intent requires receipt reconciliation before recovery"
+                )
+            if outbox.status in {"pending", "claimed"}:
+                outbox.status = "quarantined"
         updated = transition(current, WorkflowStatus.FAILED)
         row.status = updated.status.value
         row.last_error = reason[:2000]
