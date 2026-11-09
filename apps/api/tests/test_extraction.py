@@ -53,3 +53,16 @@ def test_ambiguous_negation_is_not_silently_dropped():
     )
     assert len(requirements) == 1
     assert requirements[0].description == "You must not upload confidential customer records."
+
+
+def test_contrasting_waiver_does_not_hide_mandatory_obligation():
+    requirements = extract_requirements(
+        uuid4(), "mixed.txt",
+        "You do not need to upload a passport, but you must provide proof of income. "
+        "No need to submit a photo; however, you must not share confidential data.",
+    )
+    assert len(requirements) == 2
+    assert requirements[0].description == "you must provide proof of income."
+    assert requirements[1].description == "you must not share confidential data."
+    assert all(requirement.status.value == "pending" for requirement in requirements)
+    assert all(not requirement.evidence for requirement in requirements)
