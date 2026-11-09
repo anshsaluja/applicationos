@@ -31,3 +31,25 @@ def test_instruction_provenance_identifies_source_without_claiming_compliance():
     assert evidence.source_document_id == source
     assert evidence.source_label == "rules.txt"
     assert evidence.excerpt == "Provide a photo ID."
+
+
+def test_explicit_waivers_are_not_reported_as_required_actions():
+    requirements = extract_requirements(
+        uuid4(), "waivers.txt",
+        "You do not need to upload a passport. "
+        "It is not required to provide bank statements. "
+        "There is no need to submit an extra photo. "
+        "You must provide a signed consent form.",
+    )
+    assert len(requirements) == 1
+    assert requirements[0].description == "You must provide a signed consent form."
+    assert requirements[0].status.value == "pending"
+
+
+def test_ambiguous_negation_is_not_silently_dropped():
+    requirements = extract_requirements(
+        uuid4(), "conditions.txt",
+        "You must not upload confidential customer records.",
+    )
+    assert len(requirements) == 1
+    assert requirements[0].description == "You must not upload confidential customer records."
