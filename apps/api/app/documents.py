@@ -40,6 +40,10 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
             raise HTTPException(status_code=422, detail="Plain-text document must be valid UTF-8") from exc
     else:
         text = _extract_pdf(data)
+    # Reject binary/control-character payloads masquerading as readable text.
+    # Preserve tabs, newlines, and carriage returns for document layout.
+    if any(ord(ch) < 32 and ch not in "\\t\\n\\r" for ch in text):
+        raise HTTPException(status_code=422, detail="Document contains unsupported control characters")
     if len(text) > MAX_EXTRACTED_CHARACTERS:
         raise HTTPException(status_code=413, detail="Extracted document text exceeds limit")
     if not text.strip():
