@@ -77,7 +77,7 @@ def readiness() -> Response:
         engine = build_engine()
         with engine.connect() as connection:
             connection.execute(sql_text("SELECT 1"))
-    except Exception:
+    except Exception:  # noqa: BLE001 - readiness must fail closed for any DB setup/driver error
         return JSONResponse(status_code=503, content={"status": "unavailable"})
     finally:
         if engine is not None:
