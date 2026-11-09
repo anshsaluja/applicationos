@@ -175,7 +175,7 @@ def test_cors_preflight_only_allows_configured_origin() -> None:
 def test_workflow_idempotency_key_rejects_ambiguous_input_without_database() -> None:
     from uuid import uuid4
 
-    for key in (" ", "  key", "key ", "key\\nother", "key\\tother", "key\\u007fother"):
+    for key in (" ", "  key", "key ", "key\nother", "key\tother", "key\u007fother"):
         response = client.post(
             "/v1/workflows",
             json={"action_id": str(uuid4()), "idempotency_key": key},
