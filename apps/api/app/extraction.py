@@ -31,21 +31,22 @@ def extract_requirements(document_id: UUID, filename: str, text: str) -> list[Re
     results: list[Requirement] = []
     seen: set[str] = set()
     for match in SENTENCE.finditer(text):
-        excerpt = match.group().strip()
-        normalized = " ".join(excerpt.casefold().split()).rstrip(".!?")
-        if not excerpt or not CLAUSE.search(excerpt) or WAIVER.search(excerpt) or normalized in seen:
-            continue
-        seen.add(normalized)
-        # Evidence here proves the *instruction exists*, not that it is satisfied.
-        # Requirement evidence stays empty until actual supporting proof is reviewed.
-        results.append(
-            Requirement(
-                id=uuid5(document_id, normalized),
-                title=excerpt[:120],
-                description=excerpt,
-                evidence=[],
+        sentence = match.group().strip()
+        for clause in CONTRAST.split(sentence):
+            excerpt = clause.strip()
+            normalized = " ".join(excerpt.casefold().split()).rstrip(".!?")
+            if not excerpt or not CLAUSE.search(excerpt) or WAIVER.search(excerpt) or normalized in seen:
+                continue
+            seen.add(normalized)
+            # Provenance is the exact extracted clause, not satisfaction evidence.
+            results.append(
+                Requirement(
+                    id=uuid5(document_id, normalized),
+                    title=excerpt[:120],
+                    description=excerpt,
+                    evidence=[],
+                )
             )
-        )
     return results
 
 
