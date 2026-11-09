@@ -57,3 +57,32 @@ def test_filename_removes_invisible_direction_and_format_controls():
     assert _safe_filename("report\u202egnp.exe.txt") == "reportgnp.exe.txt"
     assert _safe_filename("review\u200b-notes\u2066.txt") == "review-notes.txt"
     assert _safe_filename("Cafe\u0301.txt") == "Caf\u00e9.txt"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", [b"hello\\x00world", b"hello\\x1b[31mworld", b"hello\\x08world"])
+async def test_reject_binary_and_terminal_control_characters(payload):
+    upload = UploadFile(
+        filename="instructions.txt",
+        file=BytesIO(payload),
+        headers=__import__("starlette.datastructures", fromlist=["Headers"]).Headers(
+            {"content-type": "text/plain"}
+        ),
+    )
+    with pytest.raises(HTTPException) as exc:
+        await ingest_upload(upload)
+    assert exc.value.status_code == 422
+    assert exc.value.detail == "Document contains unsupported control characters"
+
+
+@pytest.mark.asyncio
+async def test_allow_normal_text_layout_whitespace():
+    upload = UploadFile(
+        filename="instructions.txt",
+        file=BytesIO(b"First\\tcolumn\\r\\nSecond line\\n"),
+        headers=__import__("starlette.datastructures", fromlist=["Headers"]).Headers(
+            {"content-type": "text/plain"}
+        ),
+    )
+    document = await ingest_upload(upload)
+    assert document.text == "First\\tcolumn\\r\\nSecond line"
