@@ -170,3 +170,25 @@ def test_cors_preflight_only_allows_configured_origin() -> None:
     )
     assert denied.status_code == 400
     assert "access-control-allow-origin" not in denied.headers
+
+
+def test_workflow_idempotency_key_rejects_ambiguous_input_without_database() -> None:
+    from uuid import uuid4
+
+    for key in (" ", "  key", "key ", "key\\nother", "key\\tother", "key\\u007fother"):
+        response = client.post(
+            "/v1/workflows",
+            json={"action_id": str(uuid4()), "idempotency_key": key},
+        )
+        assert response.status_code == 422
+        assert response.headers["cache-control"] == "no-store"
+
+
+def test_workflow_idempotency_key_preserves_valid_internal_spaces() -> None:
+    from uuid import uuid4
+
+    from app.api import WorkflowCreateRequest
+
+    key = "case 123: step 2"
+    payload = WorkflowCreateRequest(action_id=uuid4(), idempotency_key=key)
+    assert payload.idempotency_key == key
