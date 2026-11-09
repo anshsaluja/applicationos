@@ -95,6 +95,16 @@ jobs:
           else:
               raise SystemExit("FastAPI did not become healthy within 60 seconds")
           PY
+          # Liveness alone is insufficient: require a real PostgreSQL connection
+          # before exercising the persisted document-to-execution journey.
+          python - <<'PY'
+          import json
+          import urllib.request
+
+          with urllib.request.urlopen("http://127.0.0.1:8000/ready", timeout=10) as response:
+              assert response.status == 200, "API database readiness failed"
+              assert json.load(response) == {"status": "ready"}
+          PY
           APPLICATIONOS_SMOKE_API_URL=http://127.0.0.1:8000 python ../../scripts/smoke_local_journey.py
       - name: Enforce lint gate
         if: always()
