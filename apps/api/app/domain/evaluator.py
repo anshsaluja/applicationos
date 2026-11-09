@@ -67,9 +67,15 @@ def evaluate_requirements(requirements: list[Requirement]) -> EvaluationResult:
 
 
 def _has_conflicting_evidence(evidence: list[Evidence]) -> bool:
-    """Flag distinct normalized excerpts for the same source label as conflicting evidence."""
-    values_by_label: dict[str, set[str]] = {}
+    """Flag contradictory excerpts within the same document and source label.
+
+    Labels are user-facing descriptions and may recur across independent
+    documents. Do not treat two distinct documents as contradictory merely
+    because they both use a generic label such as "income".
+    """
+    values_by_source: dict[tuple[str, str], set[str]] = {}
     for item in evidence:
         normalized = " ".join(item.excerpt.casefold().split())
-        values_by_label.setdefault(item.source_label.casefold(), set()).add(normalized)
-    return any(len(values) > 1 for values in values_by_label.values())
+        source_key = (str(item.source_document_id), " ".join(item.source_label.casefold().split()))
+        values_by_source.setdefault(source_key, set()).add(normalized)
+    return any(len(values) > 1 for values in values_by_source.values())
