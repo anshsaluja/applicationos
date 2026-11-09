@@ -5,6 +5,9 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from sqlalchemy import text as sql_text
+
+from .persistence import build_engine
 
 from .api import router
 
@@ -59,6 +62,28 @@ app.include_router(router)
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ready", tags=["system"])
+def readiness() -> Response:
+    """Check database connectivity without exposing connection details.
+
+    Liveness (/health) intentionally remains independent of PostgreSQL.
+    Readiness must fail closed when durable storage is unavailable.
+    """
+    from fastapi.responses import JSONResponse
+
+    engine = None
+    try:
+        engine = build_engine()
+        with engine.connect() as connection:
+            connection.execute(sql_text("SELECT 1"))
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "unavailable"})
+    finally:
+        if engine is not None:
+            engine.dispose()
+    return JSONResponse(content={"status": "ready"})
 
 
 @app.middleware("http")
