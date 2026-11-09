@@ -294,28 +294,34 @@ class WorkflowOutboxRepository:
         query = self.session.query(WorkflowOutboxRow).filter(WorkflowOutboxRow.status == "pending")
         if action_id is not None:
             query = query.filter(WorkflowOutboxRow.action_id == action_id)
-        row = query.order_by(WorkflowOutboxRow.created_at, WorkflowOutboxRow.action_id).with_for_update(skip_locked=True).first()
-        if row is None:
-            return None
-        workflow = (
-            self.session.query(WorkflowRow)
-            .filter_by(action_id=row.action_id)
-            .with_for_update()
-            .one_or_none()
-        )
-        approval = ApprovalRepository(self.session).get(row.action_id)
-        if (
-            workflow is None
-            or workflow.status != WorkflowStatus.RUNNING.value
-            or workflow.idempotency_key != row.idempotency_key
-            or approval.status != ApprovalStatus.APPROVED
-        ):
-            row.status = "quarantined"
+        query = query.order_by(WorkflowOutboxRow.created_at, WorkflowOutboxRow.action_id)
+        # A stale intent must not starve later valid work in the same batch.
+        # Flush quarantine before selecting again so the row is excluded.
+        while True:
+            row = query.with_for_update(skip_locked=True).first()
+            if row is None:
+                return None
+            workflow = (
+                self.session.query(WorkflowRow)
+                .filter_by(action_id=row.action_id)
+                .with_for_update()
+                .one_or_none()
+            )
+            approval = ApprovalRepository(self.session).get(row.action_id)
+            if (
+                workflow is None
+                or workflow.status != WorkflowStatus.RUNNING.value
+                or workflow.idempotency_key != row.idempotency_key
+                or approval.status != ApprovalStatus.APPROVED
+            ):
+                row.status = "quarantined"
+                self.session.flush()
+                if action_id is not None:
+                    return None
+                continue
+            row.status = "claimed"
             self.session.flush()
-            return None
-        row.status = "claimed"
-        self.session.flush()
-        return row
+            return row
 
 
     def quarantine_interrupted_claim(self, action_id: UUID, *, reason: str) -> WorkflowOutboxRow:
