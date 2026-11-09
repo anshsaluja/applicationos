@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -13,12 +14,38 @@ app = FastAPI(
     description="Agentic workflow API for complex application processes.",
 )
 
-# Explicit origins only: never permit wildcard browser access to uploaded documents.
-origins = [
-    origin.strip().rstrip("/")
-    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-    if origin.strip()
-]
+def parse_cors_origins(value: str) -> list[str]:
+    """Allow only explicit HTTP(S) browser origins, never wildcards or URL paths."""
+    origins: list[str] = []
+    for item in value.split(","):
+        origin = item.strip().rstrip("/")
+        if not origin:
+            continue
+        parsed = urlsplit(origin)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+            or "*" in origin
+        ):
+            raise ValueError("CORS_ALLOWED_ORIGINS must contain explicit HTTP(S) origins")
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise ValueError("CORS_ALLOWED_ORIGINS contains an invalid port") from exc
+        if port is not None and not 1 <= port <= 65535:
+            raise ValueError("CORS_ALLOWED_ORIGINS contains an invalid port")
+        if origin not in origins:
+            origins.append(origin)
+    return origins
+
+
+# Explicit origins only: reject unsafe configuration rather than silently broadening access.
+origins = parse_cors_origins(os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
