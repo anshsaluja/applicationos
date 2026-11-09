@@ -109,6 +109,12 @@ def persist_document_requirements(document_id: UUID) -> PersistedRequirementsRes
     from .persistence import WorkspaceRepository, WorkspaceRow
 
     with session_scope(get_session_factory()) as session:
+        # Serialize concurrent persistence requests for the same document.
+        # Otherwise both callers may insert the same deterministic UUID.
+        from sqlalchemy import text
+
+        lock_key = int.from_bytes(document_id.bytes[:8], "big", signed=True)
+        session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
         document = DocumentRepository(session).get(document_id)
         if document is None:
             raise HTTPException(status_code=404, detail="Document not found")
