@@ -46,3 +46,24 @@ def test_api_error_responses_keep_security_headers() -> None:
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["referrer-policy"] == "no-referrer"
     assert response.headers["x-frame-options"] == "DENY"
+
+
+def test_request_ids_are_unique_and_not_client_controlled() -> None:
+    first = client.get("/health", headers={"X-Request-ID": "attacker-controlled"})
+    second = client.get("/health")
+    from uuid import UUID
+
+    first_id = first.headers["x-request-id"]
+    second_id = second.headers["x-request-id"]
+    assert str(UUID(first_id)) == first_id
+    assert str(UUID(second_id)) == second_id
+    assert first_id != second_id
+    assert first_id != "attacker-controlled"
+
+
+def test_validation_errors_have_request_ids() -> None:
+    response = client.get("/v1/documents/not-a-uuid")
+    from uuid import UUID
+
+    assert response.status_code == 422
+    assert str(UUID(response.headers["x-request-id"])) == response.headers["x-request-id"]
