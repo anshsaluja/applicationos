@@ -99,11 +99,22 @@ jobs:
           # before exercising the persisted document-to-execution journey.
           python - <<'PY'
           import json
+          import time
+          import urllib.error
           import urllib.request
 
-          with urllib.request.urlopen("http://127.0.0.1:8000/ready", timeout=10) as response:
-              assert response.status == 200, "API database readiness failed"
-              assert json.load(response) == {"status": "ready"}
+          # The API can become live before PostgreSQL is ready for connections.
+          # Bound retries to 30 seconds; fail closed if readiness never succeeds.
+          for attempt in range(30):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:8000/ready", timeout=2) as response:
+                      if response.status == 200 and json.load(response) == {"status": "ready"}:
+                          break
+              except (urllib.error.URLError, TimeoutError):
+                  pass
+              time.sleep(1)
+          else:
+              raise SystemExit("PostgreSQL readiness did not succeed within 30 attempts")
           PY
           APPLICATIONOS_SMOKE_API_URL=http://127.0.0.1:8000 python ../../scripts/smoke_local_journey.py
       - name: Enforce lint gate
