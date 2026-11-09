@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .documents import ingest_upload
 from .domain.evaluator import evaluate_requirements
@@ -189,6 +189,14 @@ class WorkflowCreateRequest(BaseModel):
     action_id: UUID
     idempotency_key: str = Field(min_length=1, max_length=200)
     max_attempts: int = Field(default=3, ge=1, le=10)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def validate_idempotency_key(cls, value: str) -> str:
+        # Do not silently normalize caller keys: that could alias distinct intents.
+        if value != value.strip() or any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+            raise ValueError("Idempotency key must not contain surrounding whitespace or control characters")
+        return value
 
 
 @router.post("/workflows", response_model=WorkflowCheckpointResponse, tags=["workflows"])
