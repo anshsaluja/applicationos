@@ -185,6 +185,62 @@ def get_workflow_checkpoint(action_id: UUID) -> WorkflowCheckpointResponse:
         return WorkflowCheckpointResponse(**state.model_dump())
 
 
+class WorkflowDispatchStatusResponse(BaseModel):
+    """Read-only reconciliation view; an outbox intent is not proof of execution."""
+
+    action_id: UUID
+    workflow_status: str
+    outbox_status: str | None
+    synthetic_receipt_present: bool
+    reconciliation_required: bool
+
+
+@router.get(
+    "/workflows/{action_id}/dispatch-status",
+    response_model=WorkflowDispatchStatusResponse,
+    tags=["workflows"],
+)
+def get_workflow_dispatch_status(action_id: UUID) -> WorkflowDispatchStatusResponse:
+    """Inspect crash recovery without claiming, retrying, or executing an action.
+
+    Claimed intents are ambiguous after a crash. Dispatched intents without a
+    matching synthetic receipt must never be represented as completed.
+    This local diagnostic endpoint requires tenant auth before public hosting.
+    """
+    from .persistence import (
+        SyntheticReceiptRow,
+        WorkflowOutboxRow,
+        WorkflowRepository,
+    )
+
+    with session_scope(get_session_factory()) as session:
+        state = WorkflowRepository(session).get(action_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        outbox = session.get(WorkflowOutboxRow, action_id)
+        receipt = session.get(SyntheticReceiptRow, action_id)
+        receipt_valid = (
+            outbox is not None
+            and receipt is not None
+            and receipt.adapter == "synthetic-noop"
+            and receipt.idempotency_key == state.idempotency_key
+            and outbox.idempotency_key == state.idempotency_key
+        )
+        outbox_status = outbox.status if outbox is not None else None
+        # Claimed/quarantined intents need operator reconciliation; a dispatched
+        # intent without matching proof is also unsafe to treat as completed.
+        needs_reconciliation = outbox_status in {"claimed", "quarantined"} or (
+            outbox_status == "dispatched" and not receipt_valid
+        )
+        return WorkflowDispatchStatusResponse(
+            action_id=action_id,
+            workflow_status=state.status.value,
+            outbox_status=outbox_status,
+            synthetic_receipt_present=receipt_valid,
+            reconciliation_required=needs_reconciliation,
+        )
+
+
 class WorkflowCreateRequest(BaseModel):
     action_id: UUID
     idempotency_key: str = Field(min_length=1, max_length=200)
