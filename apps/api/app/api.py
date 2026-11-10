@@ -197,6 +197,11 @@ def requires_dispatch_reconciliation(
         return True
     if workflow_status == "running" and outbox_status is None:
         return True
+    # A receipt cannot legitimately exist before the outbox is dispatched.
+    # This also catches a stale pending intent with a recorded effect, which
+    # must not be claimed again by a worker.
+    if receipt_valid and outbox_status != "dispatched":
+        return True
     if outbox_status in {"claimed", "quarantined"}:
         return True
     if outbox_status == "dispatched" and not receipt_valid:
