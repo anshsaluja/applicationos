@@ -223,6 +223,7 @@ class WorkflowDispatchStatusResponse(BaseModel):
     workflow_status: str
     outbox_status: str | None
     synthetic_receipt_present: bool
+    synthetic_receipt_valid: bool
     reconciliation_required: bool
 
 
@@ -266,7 +267,8 @@ def get_workflow_dispatch_status(action_id: UUID) -> WorkflowDispatchStatusRespo
             action_id=action_id,
             workflow_status=state.status.value,
             outbox_status=outbox_status,
-            synthetic_receipt_present=receipt_valid,
+            synthetic_receipt_present=receipt is not None,
+            synthetic_receipt_valid=receipt_valid,
             reconciliation_required=needs_reconciliation,
         )
 
