@@ -36,6 +36,8 @@ def plan_persisted_workflow(session, action_id: UUID) -> dict[str, str] | None:
             and outbox is not None
             and outbox.status == "dispatched"
             and receipt is not None
+            and outbox.action_id == action_id
+            and receipt.action_id == action_id
             and receipt.adapter == "synthetic-noop"
             and receipt.idempotency_key == workflow.idempotency_key
             and outbox.idempotency_key == workflow.idempotency_key
