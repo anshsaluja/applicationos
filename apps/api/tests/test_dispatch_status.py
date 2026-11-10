@@ -62,7 +62,8 @@ def test_dispatch_status_reconciliation(
 
     result = api.get_workflow_dispatch_status(action_id)
     assert result.outbox_status == outbox_status
-    assert result.synthetic_receipt_present is expected_receipt
+    assert result.synthetic_receipt_present is (receipt is not None)
+    assert result.synthetic_receipt_valid is expected_receipt
     assert result.reconciliation_required is expected_reconciliation
 
 
