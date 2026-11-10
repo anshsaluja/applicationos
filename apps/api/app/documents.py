@@ -42,7 +42,7 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
         text = _extract_pdf(data)
     # Reject binary/control-character payloads masquerading as readable text.
     # Preserve tabs, newlines, and carriage returns for document layout.
-    if any(ord(ch) < 32 and ch not in "\t\n\r" for ch in text):
+    if any(unicodedata.category(ch) == "Cc" and ch not in "\t\n\r" for ch in text):
         raise HTTPException(status_code=422, detail="Document contains unsupported control characters")
     # Directional formatting can visually reorder instructions and evidence.
     # Reject it rather than displaying a misleading excerpt to reviewers.
