@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from .domain.approvals import ApprovalStatus
 from .persistence import (
     ApprovalRepository,
     SyntheticReceiptRow,
@@ -38,6 +39,9 @@ def plan_persisted_workflow(session, action_id: UUID) -> dict[str, str] | None:
             and receipt is not None
             and outbox.action_id == action_id
             and receipt.action_id == action_id
+            and approval is not None
+            and approval.action_id == action_id
+            and approval.status == ApprovalStatus.APPROVED
             and receipt.adapter == "synthetic-noop"
             and receipt.idempotency_key == workflow.idempotency_key
             and outbox.idempotency_key == workflow.idempotency_key
