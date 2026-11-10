@@ -211,9 +211,7 @@ def requires_dispatch_reconciliation(
         return True
     if outbox_status == "dispatched" and not receipt_valid:
         return True
-    if outbox_status == "dispatched" and workflow_status not in {"running", "succeeded"}:
-        return True
-    return False
+    return outbox_status == "dispatched" and workflow_status not in {"running", "succeeded"}
 
 
 class WorkflowDispatchStatusResponse(BaseModel):
