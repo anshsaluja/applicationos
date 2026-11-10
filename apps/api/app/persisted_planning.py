@@ -7,13 +7,13 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from .planning_graph import build_planning_graph
 from .persistence import (
     ApprovalRepository,
     SyntheticReceiptRow,
     WorkflowOutboxRow,
     WorkflowRepository,
 )
+from .planning_graph import build_planning_graph
 
 
 def plan_persisted_workflow(session, action_id: UUID) -> dict[str, str] | None:
