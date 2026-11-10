@@ -44,7 +44,7 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
     # Preserve tabs, newlines, and carriage returns for document layout.
     if any(ord(ch) < 32 and ch not in "\t\n\r" for ch in text):
         raise HTTPException(status_code=422, detail="Document contains unsupported control characters")
-    if len(text) > MAX_EXTRACTED_CHARACTERS:
+    # Directional formatting can visually reorder instructions and evidence.\n    # Reject it rather than displaying a misleading excerpt to reviewers.\n    if any(ch in "\\u202a\\u202b\\u202c\\u202d\\u202e\\u2066\\u2067\\u2068\\u2069" for ch in text):\n        raise HTTPException(status_code=422, detail="Document contains unsupported bidirectional formatting")\n    if len(text) > MAX_EXTRACTED_CHARACTERS:
         raise HTTPException(status_code=413, detail="Extracted document text exceeds limit")
     if not text.strip():
         raise HTTPException(status_code=422, detail="No extractable text found")
