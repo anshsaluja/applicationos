@@ -184,14 +184,16 @@ def test_workflow_idempotency_key_rejects_ambiguous_input_without_database() -> 
         assert response.headers["cache-control"] == "no-store"
 
 
-def test_workflow_idempotency_key_preserves_valid_internal_spaces() -> None:
+def test_workflow_idempotency_key_rejects_internal_spaces_before_database() -> None:
+    """Whitespace must not produce ambiguous execution identities."""
     from uuid import uuid4
 
-    from app.api import WorkflowCreateRequest
-
-    key = "case 123: step 2"
-    payload = WorkflowCreateRequest(action_id=uuid4(), idempotency_key=key)
-    assert payload.idempotency_key == key
+    response = client.post(
+        "/v1/workflows",
+        json={"action_id": str(uuid4()), "idempotency_key": "case 123: step 2"},
+    )
+    assert response.status_code == 422
+    assert response.headers["cache-control"] == "no-store"
 
 
 def test_dispatch_reconciliation_flags_inconsistent_persisted_state() -> None:
