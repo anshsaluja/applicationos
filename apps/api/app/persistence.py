@@ -585,6 +585,10 @@ class WorkflowRepository:
         current = self._state(row)
         if current.status != WorkflowStatus.READY:
             raise WorkflowTransitionError("Only ready workflows can be claimed")
+        # A prior intent may have reached an effect adapter. Never claim the
+        # same action again, even if its checkpoint was reset to READY.
+        if self.session.get(WorkflowOutboxRow, action_id) is not None:
+            raise WorkflowTransitionError("Prior dispatch intent requires reconciliation")
         approval = ApprovalRepository(self.session).get(action_id)
         claimed = transition(current, WorkflowStatus.RUNNING, approval=approval)
         require_dispatch_authorization(claimed, approval=approval)
@@ -616,6 +620,11 @@ class WorkflowRepository:
                 WorkflowRow.status == WorkflowStatus.READY.value,
                 WorkflowRow.attempt < WorkflowRow.max_attempts,
                 ApprovalRow.status == ApprovalStatus.APPROVED.value,
+                # Exclude previously dispatched identities at the SQL boundary.
+                # A stale READY checkpoint must not be reclaimed.
+                ~self.session.query(WorkflowOutboxRow.action_id)
+                .filter(WorkflowOutboxRow.action_id == WorkflowRow.action_id)
+                .exists(),
             )
             .order_by(WorkflowRow.action_id)
             .with_for_update(of=WorkflowRow, skip_locked=True)
