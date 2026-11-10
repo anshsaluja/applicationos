@@ -3,7 +3,8 @@
 from io import BytesIO
 
 import pytest
-from fastapi import HTTPException, UploadFile\nfrom starlette.datastructures import Headers
+from fastapi import HTTPException, UploadFile
+from starlette.datastructures import Headers
 
 from app.documents import ingest_upload
 
