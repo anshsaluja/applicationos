@@ -114,3 +114,48 @@ def test_persisted_plan_rejects_foreign_action_evidence(monkeypatch, mismatched_
         SimpleNamespace(action_id=receipt_id, adapter="synthetic-noop", idempotency_key="safe-key"),
     )
     assert plan_persisted_workflow(session, action_id)["next_step"] == "reconcile"
+
+
+@pytest.mark.parametrize("approval_status", [ApprovalStatus.PENDING, ApprovalStatus.REJECTED])
+def test_persisted_completion_requires_approved_decision(monkeypatch, approval_status):
+    action_id = uuid4()
+    workflow = WorkflowState(
+        action_id=action_id, idempotency_key="safe-key", status=WorkflowStatus.SUCCEEDED
+    )
+    approval = ApprovalDecision(action_id=action_id, status=approval_status)
+    monkeypatch.setattr(
+        "app.persisted_planning.WorkflowRepository",
+        lambda session: SimpleNamespace(get=lambda key: workflow),
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.ApprovalRepository",
+        lambda session: SimpleNamespace(get=lambda key: approval),
+    )
+    session = FakeSession(
+        SimpleNamespace(action_id=action_id, status="dispatched", idempotency_key="safe-key"),
+        SimpleNamespace(action_id=action_id, adapter="synthetic-noop", idempotency_key="safe-key"),
+    )
+    assert plan_persisted_workflow(session, action_id)["next_step"] == "reconcile"
+
+
+def test_persisted_completion_rejects_foreign_approval(monkeypatch):
+    action_id = uuid4()
+    workflow = WorkflowState(
+        action_id=action_id, idempotency_key="safe-key", status=WorkflowStatus.SUCCEEDED
+    )
+    approval = ApprovalDecision(
+        action_id=uuid4(), status=ApprovalStatus.APPROVED, reviewer_id="operator"
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.WorkflowRepository",
+        lambda session: SimpleNamespace(get=lambda key: workflow),
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.ApprovalRepository",
+        lambda session: SimpleNamespace(get=lambda key: approval),
+    )
+    session = FakeSession(
+        SimpleNamespace(action_id=action_id, status="dispatched", idempotency_key="safe-key"),
+        SimpleNamespace(action_id=action_id, adapter="synthetic-noop", idempotency_key="safe-key"),
+    )
+    assert plan_persisted_workflow(session, action_id)["next_step"] == "reconcile"
