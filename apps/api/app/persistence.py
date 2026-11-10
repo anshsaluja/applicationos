@@ -308,11 +308,15 @@ class WorkflowOutboxRepository:
                 .one_or_none()
             )
             approval = ApprovalRepository(self.session).get(row.action_id)
+            # A receipt indicates a prior worker may have completed its effect.
+            # Never reclaim this intent, even if the receipt is malformed.
+            receipt_exists = self.session.get(SyntheticReceiptRow, row.action_id) is not None
             if (
                 workflow is None
                 or workflow.status != WorkflowStatus.RUNNING.value
                 or workflow.idempotency_key != row.idempotency_key
                 or approval.status != ApprovalStatus.APPROVED
+                or receipt_exists
             ):
                 row.status = "quarantined"
                 self.session.flush()
