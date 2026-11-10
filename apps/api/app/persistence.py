@@ -541,6 +541,16 @@ class WorkflowRepository:
         # Recheck the durable approval under the transaction, never trust
         # a caller-supplied approval object.
         approval = ApprovalRepository(self.session).get(action_id)
+        # A previous dispatch intent may have reached an effect adapter before
+        # recovery quarantined it. Reusing its idempotency key on a new attempt
+        # would make the retry appear safe while the old effect is unresolved.
+        # Require explicit reconciliation and a new action identity instead.
+        if current.status == WorkflowStatus.FAILED and target == WorkflowStatus.READY:
+            prior_intent = self.session.get(WorkflowOutboxRow, action_id)
+            if prior_intent is not None:
+                raise WorkflowTransitionError(
+                    "Prior dispatch intent requires reconciliation; create a new action"
+                )
         updated = transition(current, WorkflowStatus(target), approval=approval)
         if target == WorkflowStatus.FAILED and error is not None:
             updated = updated.model_copy(update={"last_error": error[:2000]})
