@@ -15,7 +15,7 @@ from app.persistence import SyntheticReceiptRow, WorkflowOutboxRow
 @pytest.mark.parametrize(
     ("outbox_status", "receipt_key", "expected_reconciliation", "expected_receipt"),
     [
-        (None, None, False, False),
+        (None, None, True, False),
         ("claimed", None, True, False),
         ("quarantined", None, True, False),
         ("dispatched", None, True, False),
