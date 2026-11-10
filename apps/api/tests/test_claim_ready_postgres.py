@@ -141,3 +141,33 @@ def test_batch_claim_ignores_unapproved_actions(factory):
         repo = WorkflowRepository(session)
         assert repo.get(pending).status == WorkflowStatus.AWAITING_APPROVAL
         assert repo.get(approved).attempt == 1
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_stale_ready_checkpoint_cannot_reclaim_existing_dispatch_intent(factory, batch):
+    """Even a corrupted READY checkpoint cannot replay an already queued action."""
+    from app.persistence import WorkflowOutboxRepository, WorkflowRow
+
+    action_id = new_workflow(factory)
+    with factory.begin() as session:
+        repo = WorkflowRepository(session)
+        repo.claim_ready(action_id)
+        WorkflowOutboxRepository(session).enqueue_claimed(action_id)
+
+    # Simulate an operator or stale migration resetting the checkpoint without
+    # reconciling the existing outbox identity. This is intentionally invalid.
+    with factory.begin() as session:
+        session.get(WorkflowRow, action_id).status = WorkflowStatus.READY.value
+
+    with factory.begin() as session:
+        repo = WorkflowRepository(session)
+        if batch:
+            # Other READY actions from unrelated tests may exist. Scope this
+            # assertion to the forbidden action rather than assuming an empty DB.
+            claimed = repo.claim_next_ready()
+            assert claimed is None or claimed.action_id != action_id
+        else:
+            with pytest.raises(WorkflowTransitionError, match="Prior dispatch intent"):
+                repo.claim_ready(action_id)
+        assert repo.get(action_id).status == WorkflowStatus.READY
+        assert repo.get(action_id).attempt == 1
