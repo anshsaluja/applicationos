@@ -224,3 +224,31 @@ def test_dispatch_reconciliation_allows_consistent_checkpoints() -> None:
         ("failed", None, False),
     ):
         assert not requires_dispatch_reconciliation(workflow, outbox, receipt)
+
+
+def test_dispatch_reconciliation_quarantines_invalid_receipts_even_when_pending() -> None:
+    """A receipt with the wrong adapter or idempotency key is suspicious state."""
+    from app.api import requires_dispatch_reconciliation
+
+    for workflow, outbox in (
+        ("pending", None),
+        ("ready", None),
+        ("running", "pending"),
+        ("running", "dispatched"),
+        ("succeeded", "dispatched"),
+        ("failed", "quarantined"),
+    ):
+        assert requires_dispatch_reconciliation(
+            workflow, outbox, False, receipt_present=True
+        )
+
+
+def test_dispatch_reconciliation_preserves_absent_receipt_semantics() -> None:
+    from app.api import requires_dispatch_reconciliation
+
+    assert not requires_dispatch_reconciliation(
+        "running", "pending", False, receipt_present=False
+    )
+    assert not requires_dispatch_reconciliation(
+        "pending", None, False, receipt_present=False
+    )
