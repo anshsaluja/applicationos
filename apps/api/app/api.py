@@ -280,7 +280,10 @@ class WorkflowCreateRequest(BaseModel):
     @classmethod
     def validate_idempotency_key(cls, value: str) -> str:
         # Do not silently normalize caller keys: that could alias distinct intents.
-        if value != value.strip() or any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+        if value != value.strip() or any(
+            ch.isspace() or __import__("unicodedata").category(ch) in {"Cc", "Cf"}
+            for ch in value
+        ):
             raise ValueError("Idempotency key must not contain surrounding whitespace or control characters")
         return value
 
