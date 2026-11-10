@@ -54,11 +54,11 @@ def test_persisted_plan_respects_dispatch_evidence(
         lambda session: SimpleNamespace(get=lambda key: approval),
     )
     outbox = (
-        SimpleNamespace(status=outbox_status, idempotency_key="safe-key")
+        SimpleNamespace(action_id=action_id, status=outbox_status, idempotency_key="safe-key")
         if outbox_status else None
     )
     stored_receipt = (
-        SimpleNamespace(adapter="synthetic-noop", idempotency_key="safe-key")
+        SimpleNamespace(action_id=action_id, adapter="synthetic-noop", idempotency_key="safe-key")
         if receipt else None
     )
     result = plan_persisted_workflow(FakeSession(outbox, stored_receipt), action_id)
@@ -79,8 +79,8 @@ def test_persisted_plan_rejects_mismatched_receipt(monkeypatch):
         lambda session: SimpleNamespace(get=lambda key: None),
     )
     session = FakeSession(
-        SimpleNamespace(status="dispatched", idempotency_key="correct"),
-        SimpleNamespace(adapter="synthetic-noop", idempotency_key="wrong"),
+        SimpleNamespace(action_id=action_id, status="dispatched", idempotency_key="correct"),
+        SimpleNamespace(action_id=action_id, adapter="synthetic-noop", idempotency_key="wrong"),
     )
     assert plan_persisted_workflow(session, action_id)["next_step"] == "reconcile"
 
@@ -91,3 +91,26 @@ def test_missing_workflow_returns_none(monkeypatch):
         lambda session: SimpleNamespace(get=lambda key: None),
     )
     assert plan_persisted_workflow(FakeSession(), uuid4()) is None
+
+
+@pytest.mark.parametrize("mismatched_record", ["outbox", "receipt"])
+def test_persisted_plan_rejects_foreign_action_evidence(monkeypatch, mismatched_record):
+    action_id = uuid4()
+    workflow = WorkflowState(
+        action_id=action_id, idempotency_key="safe-key", status=WorkflowStatus.SUCCEEDED
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.WorkflowRepository",
+        lambda session: SimpleNamespace(get=lambda key: workflow),
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.ApprovalRepository",
+        lambda session: SimpleNamespace(get=lambda key: None),
+    )
+    outbox_id = uuid4() if mismatched_record == "outbox" else action_id
+    receipt_id = uuid4() if mismatched_record == "receipt" else action_id
+    session = FakeSession(
+        SimpleNamespace(action_id=outbox_id, status="dispatched", idempotency_key="safe-key"),
+        SimpleNamespace(action_id=receipt_id, adapter="synthetic-noop", idempotency_key="safe-key"),
+    )
+    assert plan_persisted_workflow(session, action_id)["next_step"] == "reconcile"
