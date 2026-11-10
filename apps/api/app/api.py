@@ -186,14 +186,15 @@ def get_workflow_checkpoint(action_id: UUID) -> WorkflowCheckpointResponse:
 
 
 def requires_dispatch_reconciliation(
-    workflow_status: str, outbox_status: str | None, receipt_valid: bool
+    workflow_status: str, outbox_status: str | None, receipt_valid: bool,
+    *, receipt_present: bool = False,
 ) -> bool:
     """Fail closed on contradictory durable execution state.
 
     A succeeded workflow without a matching receipt is never trusted. A
     running workflow with no outbox cannot safely be resumed automatically.
     """
-    if workflow_status == "succeeded" and (outbox_status != "dispatched" or not receipt_valid):
+    # A mismatched or forged receipt is not equivalent to an absent receipt.\n    # Even an otherwise pending intent must be quarantined for investigation.\n    if receipt_present and not receipt_valid:\n        return True\n    if workflow_status == "succeeded" and (outbox_status != "dispatched" or not receipt_valid):
         return True
     if workflow_status == "running" and outbox_status is None:
         return True
@@ -254,8 +255,7 @@ def get_workflow_dispatch_status(action_id: UUID) -> WorkflowDispatchStatusRespo
         )
         outbox_status = outbox.status if outbox is not None else None
         needs_reconciliation = requires_dispatch_reconciliation(
-            state.status.value, outbox_status, receipt_valid
-        )
+            state.status.value, outbox_status, receipt_valid,\n            receipt_present=receipt is not None,\n        )
         return WorkflowDispatchStatusResponse(
             action_id=action_id,
             workflow_status=state.status.value,
