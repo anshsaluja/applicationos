@@ -19,7 +19,7 @@ def ingest(payload: bytes, *, filename: str = "instructions.txt"):
     return asyncio.run(ingest_upload(upload))
 
 
-@pytest.mark.parametrize("character", ["\\u202a", "\\u202b", "\\u202c", "\\u202d", "\\u202e", "\\u2066", "\\u2067", "\\u2068", "\\u2069"])
+@pytest.mark.parametrize("character", ["\u202a", "\u202b", "\u202c", "\u202d", "\u202e", "\u2066", "\u2067", "\u2068", "\u2069"])
 def test_rejects_bidirectional_controls(character):
     with pytest.raises(HTTPException) as error:
         ingest(("Submit proof " + character + "of income").encode("utf-8"))
@@ -27,7 +27,7 @@ def test_rejects_bidirectional_controls(character):
     assert "bidirectional" in error.value.detail
 
 
-@pytest.mark.parametrize("character", ["\\x00", "\\x01", "\\x1b", "\\x7f"])
+@pytest.mark.parametrize("character", ["\x00", "\x01", "\x1b", "\x7f"])
 def test_rejects_nonprinting_controls(character):
     with pytest.raises(HTTPException) as error:
         ingest(("Submit " + character + "proof").encode("utf-8"))
@@ -41,7 +41,7 @@ def test_preserves_multilingual_text_and_layout():
 
 
 def test_filename_cannot_smuggle_path_or_direction_override():
-    document = ingest(b"Proof of address", filename="folder\\\\subdir/evil\\u202e.txt")
+    document = ingest(b"Proof of address", filename="folder\\\\subdir/evil\u202e.txt")
     assert document.filename == "evil.txt"
 
 
