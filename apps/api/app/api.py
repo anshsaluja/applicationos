@@ -253,6 +253,8 @@ def get_workflow_dispatch_status(action_id: UUID) -> WorkflowDispatchStatusRespo
         receipt_valid = (
             outbox is not None
             and receipt is not None
+            and outbox.action_id == action_id
+            and receipt.action_id == action_id
             and receipt.adapter == "synthetic-noop"
             and receipt.idempotency_key == state.idempotency_key
             and outbox.idempotency_key == state.idempotency_key
