@@ -223,6 +223,13 @@ jobs:
           before=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
             "SELECT count(*) FROM workflow_checkpoints")
           test "$before" -gt 0
+          # Pin a real completed synthetic workflow, not just the row count.
+          # A count-only assertion can pass even when the wrong record survives.
+          action_id=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+            "SELECT action_id FROM workflow_checkpoints WHERE status = 'succeeded' ORDER BY action_id LIMIT 1")
+          test -n "$action_id"
+          status_before=$(curl --fail --silent --show-error "http://127.0.0.1:8000/v1/workflows/$action_id")
+          printf '%s' "$status_before" | python3 -c 'import json,sys; assert json.load(sys.stdin)["status"] == "succeeded"'
           docker compose restart api
           for attempt in $(seq 1 60); do
             if curl --fail --silent --show-error http://127.0.0.1:8000/ready | grep -q '"ready"'; then
@@ -237,6 +244,10 @@ jobs:
           after=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
             "SELECT count(*) FROM workflow_checkpoints")
           test "$after" -eq "$before"
+          # Read the exact pre-restart action through the restarted API.
+          # The returned checkpoint must remain terminal and unchanged.
+          status_after=$(curl --fail --silent --show-error "http://127.0.0.1:8000/v1/workflows/$action_id")
+          test "$status_after" = "$status_before"
           docker compose exec -T \
             -e APPLICATIONOS_SMOKE_REVIEW_TOKEN="$APPLICATIONOS_REVIEW_TOKEN" \
             -e APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION=local-only \
