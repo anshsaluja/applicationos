@@ -82,3 +82,19 @@ def test_optional_document_statements_are_not_misclassified_as_obligations():
         "You must not share confidential records.",
     ]
     assert all(not requirement.evidence for requirement in requirements)
+
+
+def test_contracted_waivers_do_not_create_false_requirements():
+    requirements = extract_requirements(
+        uuid4(),
+        "contractions.txt",
+        "You don't need to upload a passport. "
+        "An applicant doesn’t need to submit a second photo. "
+        "You must provide proof of income. "
+        "You must not upload confidential records.",
+    )
+    assert [item.description for item in requirements] == [
+        "You must provide proof of income.",
+        "You must not upload confidential records.",
+    ]
+    assert all(not item.evidence for item in requirements)
