@@ -66,3 +66,19 @@ def test_contrasting_waiver_does_not_hide_mandatory_obligation():
     assert requirements[1].description == "you must not share confidential data."
     assert all(requirement.status.value == "pending" for requirement in requirements)
     assert all(not requirement.evidence for requirement in requirements)
+
+
+def test_optional_document_statements_are_not_misclassified_as_obligations():
+    requirements = extract_requirements(
+        uuid4(),
+        "optional.txt",
+        "A passport is not required. "
+        "A cover letter is not necessary. "
+        "A signed consent form is required. "
+        "You must not share confidential records.",
+    )
+    assert [requirement.description for requirement in requirements] == [
+        "A signed consent form is required.",
+        "You must not share confidential records.",
+    ]
+    assert all(not requirement.evidence for requirement in requirements)
