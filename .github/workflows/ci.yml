@@ -204,6 +204,19 @@ jobs:
         run: |
           docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 \
             -c "CREATE EXTENSION IF NOT EXISTS vector"
+      - name: Initialize disposable Compose PostgreSQL schema
+        run: |
+          # The API intentionally does not create tables on startup. Prepare the
+          # disposable CI database explicitly, matching the API integration job.
+          docker compose exec -T api python - <<'PY'
+          from app.persistence import Base, build_engine
+
+          engine = build_engine()
+          try:
+              Base.metadata.create_all(bind=engine)
+          finally:
+              engine.dispose()
+          PY
       - name: Exercise document, requirements, and approval boundary against Compose PostgreSQL
         run: |
           docker compose exec -T \
