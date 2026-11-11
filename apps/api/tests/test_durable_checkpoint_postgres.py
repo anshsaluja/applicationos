@@ -113,3 +113,48 @@ def test_checkpoint_recovery_is_isolated_across_independent_connections():
         )["next_step"] == "request_review"
         assert recovered.get_state(rejected_config).values["next_step"] == "request_review"
         assert recovered.get_state(rejected_config).values["workflow"].action_id == rejected_id
+
+
+
+def test_recovered_ready_checkpoint_cannot_override_running_database_state():
+    """A stale READY recommendation must be recomputed after execution starts."""
+    dsn = os.getenv("TEST_DATABASE_URL")
+    if not dsn:
+        pytest.skip("TEST_DATABASE_URL required for PostgreSQL integration")
+    if not dsn.startswith(("postgresql://", "postgresql+psycopg://")):
+        pytest.fail("TEST_DATABASE_URL must be a PostgreSQL DSN")
+
+    action_id = uuid4()
+    config = checkpoint_config(action_id)
+    key = str(uuid4())
+    approval = ApprovalDecision(
+        action_id=action_id,
+        status=ApprovalStatus.APPROVED,
+        reviewer_id="integration-reviewer",
+    )
+    ready = WorkflowState(
+        action_id=action_id, idempotency_key=key, status=WorkflowStatus.READY
+    )
+
+    with postgres_planning_graph(dsn, initialize=True) as graph:
+        assert graph.invoke(
+            {"workflow": ready, "approval": approval, "next_step": "", "explanation": ""},
+            config=config,
+        )["next_step"] == "claim_outbox"
+
+    # Simulate a different worker atomically claiming the outbox while the
+    # planning process is down. The caller must supply current durable state.
+    running = WorkflowState(
+        action_id=action_id, idempotency_key=key, status=WorkflowStatus.RUNNING
+    )
+    with postgres_planning_graph(dsn) as recovered:
+        assert recovered.get_state(config).values["next_step"] == "claim_outbox"
+        updated = recovered.invoke(
+            {"workflow": running, "approval": approval, "next_step": "", "explanation": ""},
+            config=config,
+        )
+        assert updated["next_step"] == "reconcile"
+        snapshot = recovered.get_state(config)
+        assert snapshot.values["workflow"].status == WorkflowStatus.RUNNING
+        assert snapshot.values["next_step"] == "reconcile"
+        assert "receipt" not in snapshot.values
