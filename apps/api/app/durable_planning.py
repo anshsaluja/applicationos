@@ -10,6 +10,7 @@ from typing import Iterator
 from uuid import UUID
 
 from langgraph.checkpoint.postgres import PostgresSaver
+from sqlalchemy.engine import make_url
 
 from .planning_graph import build_planning_graph
 
@@ -20,6 +21,23 @@ def checkpoint_config(thread_id: UUID | str) -> dict:
     if not identifier:
         raise ValueError("A stable nonempty thread_id is required")
     return {"configurable": {"thread_id": identifier}}
+
+
+def checkpoint_dsn(database_url: str) -> str:
+    """Normalize a SQLAlchemy PostgreSQL URL for psycopg's checkpoint saver.
+
+    Reject other database dialects instead of accidentally opening a different
+    database. Preserve URL-encoded credentials when rendering the connection URL.
+    """
+    if not database_url or not database_url.strip():
+        raise ValueError("PostgreSQL checkpoint DSN is required")
+    try:
+        url = make_url(database_url.strip())
+    except Exception as exc:
+        raise ValueError("Invalid PostgreSQL checkpoint DSN") from exc
+    if url.drivername not in ("postgresql", "postgresql+psycopg"):
+        raise ValueError("PostgreSQL checkpoint DSN must use psycopg")
+    return url.set(drivername="postgresql").render_as_string(hide_password=False)
 
 
 @contextmanager
@@ -33,9 +51,7 @@ def postgres_planning_graph(database_url: str, *, initialize: bool = False) -> I
     Note: use a psycopg-compatible PostgreSQL DSN; this helper never sends
     workflow actions or accepts graph state as execution authorization.
     """
-    if not database_url or not database_url.strip():
-        raise ValueError("PostgreSQL checkpoint DSN is required")
-    with PostgresSaver.from_conn_string(database_url) as saver:
+    with PostgresSaver.from_conn_string(checkpoint_dsn(database_url)) as saver:
         if initialize:
             saver.setup()
         yield build_planning_graph(checkpointer=saver)
