@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from .domain.approvals import ApprovalStatus
+from .domain.approvals import ApprovalGateError, require_approved
 from .persistence import (
     ApprovalRepository,
     SyntheticReceiptRow,
@@ -31,6 +31,11 @@ def plan_persisted_workflow(session, action_id: UUID) -> dict[str, str] | None:
     approval = ApprovalRepository(session).get(action_id)
     outbox = session.get(WorkflowOutboxRow, action_id)
     receipt = session.get(SyntheticReceiptRow, action_id)
+    try:
+        require_approved(approval, action_id)
+        approval_verified = True
+    except ApprovalGateError:
+        approval_verified = False
     if outbox is not None or receipt is not None:
         if (
             workflow.status.value == "succeeded"
@@ -39,9 +44,7 @@ def plan_persisted_workflow(session, action_id: UUID) -> dict[str, str] | None:
             and receipt is not None
             and outbox.action_id == action_id
             and receipt.action_id == action_id
-            and approval is not None
-            and approval.action_id == action_id
-            and approval.status == ApprovalStatus.APPROVED
+            and approval_verified
             and receipt.adapter == "synthetic-noop"
             and receipt.idempotency_key == workflow.idempotency_key
             and outbox.idempotency_key == workflow.idempotency_key
