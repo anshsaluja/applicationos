@@ -184,3 +184,71 @@ def test_persisted_completion_requires_identifiable_reviewer(monkeypatch, review
         SimpleNamespace(action_id=action_id, adapter="synthetic-noop", idempotency_key="safe-key"),
     )
     assert plan_persisted_workflow(session, action_id)["next_step"] == "reconcile"
+
+
+def test_durable_plan_uses_action_thread_and_current_database_evidence(monkeypatch):
+    """A recovered graph receives fresh approval rather than trusting its checkpoint."""
+    action_id = uuid4()
+    workflow = WorkflowState(
+        action_id=action_id, idempotency_key="safe-key", status=WorkflowStatus.READY
+    )
+    approval = ApprovalDecision(
+        action_id=action_id, status=ApprovalStatus.APPROVED, reviewer_id="operator"
+    )
+    current = {"approval": approval}
+    monkeypatch.setattr(
+        "app.persisted_planning.WorkflowRepository",
+        lambda session: SimpleNamespace(get=lambda key: workflow),
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.ApprovalRepository",
+        lambda session: SimpleNamespace(get=lambda key: current["approval"]),
+    )
+
+    class RecordingGraph:
+        def __init__(self):
+            self.calls = []
+
+        def invoke(self, state, config):
+            self.calls.append((state, config))
+            return {"next_step": "claim_outbox", "explanation": "Advisory only"}
+
+    graph = RecordingGraph()
+    session = FakeSession()
+    assert plan_persisted_workflow(session, action_id, graph=graph)["next_step"] == "claim_outbox"
+    current["approval"] = ApprovalDecision(action_id=action_id, status=ApprovalStatus.REJECTED)
+    assert plan_persisted_workflow(session, action_id, graph=graph)["next_step"] == "claim_outbox"
+    assert len(graph.calls) == 2
+    assert graph.calls[0][1] == graph.calls[1][1] == {
+        "configurable": {"thread_id": str(action_id)}
+    }
+    assert graph.calls[0][0]["approval"].status == ApprovalStatus.APPROVED
+    assert graph.calls[1][0]["approval"].status == ApprovalStatus.REJECTED
+
+
+def test_durable_plan_never_invokes_graph_when_dispatch_evidence_exists(monkeypatch):
+    """A stale checkpoint cannot replay an action that has an outbox intent."""
+    action_id = uuid4()
+    workflow = WorkflowState(
+        action_id=action_id, idempotency_key="safe-key", status=WorkflowStatus.READY
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.WorkflowRepository",
+        lambda session: SimpleNamespace(get=lambda key: workflow),
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.ApprovalRepository",
+        lambda session: SimpleNamespace(get=lambda key: None),
+    )
+
+    class ForbiddenGraph:
+        def invoke(self, *args, **kwargs):
+            raise AssertionError("Graph must not run when durable dispatch evidence exists")
+
+    session = FakeSession(
+        outbox=SimpleNamespace(action_id=action_id, status="claimed", idempotency_key="safe-key")
+    )
+    assert plan_persisted_workflow(session, action_id, graph=ForbiddenGraph()) == {
+        "next_step": "reconcile",
+        "explanation": "Existing dispatch evidence forbids planning another claim",
+    }
