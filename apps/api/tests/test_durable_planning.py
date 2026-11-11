@@ -81,3 +81,44 @@ def test_checkpoint_dsn_is_required():
     with pytest.raises(ValueError, match="DSN"):
         with durable_planning.postgres_planning_graph(" "):
             pass
+
+
+@pytest.mark.parametrize(
+    ("input_dsn", "expected"),
+    [
+        ("postgresql://localhost/app", "postgresql://localhost/app"),
+        ("postgresql+psycopg://localhost/app", "postgresql://localhost/app"),
+        (
+            "postgresql+psycopg://user:p%40ss@localhost:5432/app?sslmode=require",
+            "postgresql://user:p%40ss@localhost:5432/app?sslmode=require",
+        ),
+    ],
+)
+def test_checkpoint_dsn_normalizes_sqlalchemy_urls(input_dsn, expected):
+    assert durable_planning.checkpoint_dsn(input_dsn) == expected
+
+
+@pytest.mark.parametrize(
+    "invalid_dsn",
+    ["sqlite:///tmp/test.db", "mysql://localhost/app", "postgresql+asyncpg://localhost/app", "not a url"],
+)
+def test_checkpoint_dsn_rejects_unsupported_or_invalid_urls(invalid_dsn):
+    with pytest.raises(ValueError, match="PostgreSQL"):
+        durable_planning.checkpoint_dsn(invalid_dsn)
+
+
+def test_checkpoint_connection_normalizes_sqlalchemy_url(monkeypatch):
+    observed = []
+
+    class FakeSaver:
+        @staticmethod
+        @contextmanager
+        def from_conn_string(dsn):
+            observed.append(dsn)
+            yield object()
+
+    monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
+    monkeypatch.setattr(durable_planning, "build_planning_graph", lambda **kwargs: object())
+    with durable_planning.postgres_planning_graph("postgresql+psycopg://localhost/app"):
+        pass
+    assert observed == ["postgresql://localhost/app"]
