@@ -255,3 +255,38 @@ def test_durable_plan_never_invokes_graph_when_dispatch_evidence_exists(monkeypa
         "next_step": "reconcile",
         "explanation": "Existing dispatch evidence forbids planning another claim",
     }
+
+
+@pytest.mark.parametrize(
+    ("outbox_key", "receipt_key", "adapter", "outbox_status"),
+    [
+        ("wrong-key", "safe-key", "synthetic-noop", "dispatched"),
+        ("safe-key", "wrong-key", "synthetic-noop", "dispatched"),
+        ("safe-key", "safe-key", "untrusted-adapter", "dispatched"),
+        ("safe-key", "safe-key", "synthetic-noop", "claimed"),
+    ],
+)
+def test_completion_requires_matching_dispatch_provenance(
+    monkeypatch, outbox_key, receipt_key, adapter, outbox_status
+):
+    """Neither a forged receipt nor an incomplete dispatch proves success."""
+    action_id = uuid4()
+    workflow = WorkflowState(
+        action_id=action_id, idempotency_key="safe-key", status=WorkflowStatus.SUCCEEDED
+    )
+    approval = ApprovalDecision(
+        action_id=action_id, status=ApprovalStatus.APPROVED, reviewer_id="operator"
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.WorkflowRepository",
+        lambda session: SimpleNamespace(get=lambda key: workflow),
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.ApprovalRepository",
+        lambda session: SimpleNamespace(get=lambda key: approval),
+    )
+    session = FakeSession(
+        SimpleNamespace(action_id=action_id, status=outbox_status, idempotency_key=outbox_key),
+        SimpleNamespace(action_id=action_id, adapter=adapter, idempotency_key=receipt_key),
+    )
+    assert plan_persisted_workflow(session, action_id)["next_step"] == "reconcile"
