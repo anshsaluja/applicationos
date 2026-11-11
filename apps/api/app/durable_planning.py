@@ -5,8 +5,8 @@ must still pass transactional approval and idempotency checks in persistence.
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 from uuid import UUID
 
 from langgraph.checkpoint.postgres import PostgresSaver
