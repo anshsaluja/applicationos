@@ -200,6 +200,10 @@ jobs:
           set -Eeuo pipefail
           curl --fail --silent --show-error http://127.0.0.1:3000/ > /dev/null
           curl --fail --silent --show-error http://127.0.0.1:8000/ready | grep -q '"ready"'
+      - name: Enable pgvector in disposable PostgreSQL
+        run: |
+          docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 \
+            -c "CREATE EXTENSION IF NOT EXISTS vector"
       - name: Exercise document, requirements, and approval boundary against Compose PostgreSQL
         run: |
           docker compose exec -T \
@@ -217,7 +221,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           before=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
-            "SELECT count(*) FROM workflows")
+            "SELECT count(*) FROM workflow_checkpoints")
           test "$before" -gt 0
           docker compose restart api
           for attempt in $(seq 1 60); do
@@ -231,7 +235,7 @@ jobs:
             sleep 2
           done
           after=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
-            "SELECT count(*) FROM workflows")
+            "SELECT count(*) FROM workflow_checkpoints")
           test "$after" -eq "$before"
           docker compose exec -T \
             -e APPLICATIONOS_SMOKE_REVIEW_TOKEN="$APPLICATIONOS_REVIEW_TOKEN" \
