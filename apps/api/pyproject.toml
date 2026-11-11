@@ -13,6 +13,7 @@ dependencies = [
   "alembic>=1.14.0,<2.0",
   "pgvector>=0.3.6,<1.0",
   "langgraph>=0.2.50,<1.0",
+  "langgraph-checkpoint-postgres>=2.0.0,<3.0",
   "httpx>=0.28.0,<1.0",
   "python-multipart>=0.0.17,<1.0",
   "PyMuPDF>=1.24.0,<2.0"
