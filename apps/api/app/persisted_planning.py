@@ -14,11 +14,16 @@ from .persistence import (
     WorkflowOutboxRow,
     WorkflowRepository,
 )
+from .durable_planning import checkpoint_config
 from .planning_graph import build_planning_graph
 
 
-def plan_persisted_workflow(session, action_id: UUID) -> dict[str, str] | None:
-    """Return a fail-closed plan from one database transaction, without writes.
+def plan_persisted_workflow(session, action_id: UUID, *, graph=None) -> dict[str, str] | None:
+    """Return a fail-closed plan from one database transaction.
+
+    With an optional checkpointed graph, persist advisory planning state under
+    the action's stable thread ID. Database evidence is always reloaded first;
+    graph checkpoints never override approval, outbox or receipt checks.
 
     An existing outbox intent permanently prevents this action identity from
     being recommended for another claim. Claimed, quarantined and dispatched
@@ -63,7 +68,10 @@ def plan_persisted_workflow(session, action_id: UUID) -> dict[str, str] | None:
             "next_step": "reconcile",
             "explanation": "Successful checkpoint lacks durable dispatch evidence",
         }
-    result = build_planning_graph().invoke(
-        {"workflow": workflow, "approval": approval, "next_step": "", "explanation": ""}
-    )
+    planner = graph if graph is not None else build_planning_graph()
+    state = {"workflow": workflow, "approval": approval, "next_step": "", "explanation": ""}
+    if graph is not None:
+        result = planner.invoke(state, config=checkpoint_config(action_id))
+    else:
+        result = planner.invoke(state)
     return {"next_step": result["next_step"], "explanation": result["explanation"]}
