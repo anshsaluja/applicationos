@@ -64,3 +64,52 @@ def test_postgres_checkpoint_survives_reopened_connection_and_isolates_threads()
 
         # Another thread must remain independent after the revoked thread advances.
         assert not recovered.get_state(checkpoint_config(other_id)).values
+
+
+def test_checkpoint_recovery_is_isolated_across_independent_connections():
+    """Two persisted threads must retain distinct decisions after reopening."""
+    dsn = os.getenv("TEST_DATABASE_URL")
+    if not dsn:
+        pytest.skip("TEST_DATABASE_URL required for PostgreSQL integration")
+    if not dsn.startswith(("postgresql://", "postgresql+psycopg://")):
+        pytest.fail("TEST_DATABASE_URL must be a PostgreSQL DSN")
+
+    approved_id, rejected_id = uuid4(), uuid4()
+    approved_config = checkpoint_config(approved_id)
+    rejected_config = checkpoint_config(rejected_id)
+
+    def state(action_id, status):
+        return {
+            "workflow": WorkflowState(
+                action_id=action_id,
+                idempotency_key=str(uuid4()),
+                status=WorkflowStatus.READY,
+            ),
+            "approval": ApprovalDecision(
+                action_id=action_id,
+                status=status,
+                reviewer_id="integration-reviewer",
+            ),
+            "next_step": "",
+            "explanation": "",
+        }
+
+    with postgres_planning_graph(dsn, initialize=True) as graph:
+        assert graph.invoke(state(approved_id, ApprovalStatus.APPROVED), config=approved_config)[
+            "next_step"
+        ] == "claim_outbox"
+        assert graph.invoke(state(rejected_id, ApprovalStatus.REJECTED), config=rejected_config)[
+            "next_step"
+        ] == "request_review"
+
+    with postgres_planning_graph(dsn) as recovered:
+        assert recovered.get_state(approved_config).values["next_step"] == "claim_outbox"
+        assert recovered.get_state(rejected_config).values["next_step"] == "request_review"
+        assert recovered.get_state(approved_config).values["workflow"].action_id == approved_id
+        assert recovered.get_state(rejected_config).values["workflow"].action_id == rejected_id
+        # Replanning one thread must not mutate another thread's saved state.
+        assert recovered.invoke(
+            state(approved_id, ApprovalStatus.REJECTED), config=approved_config
+        )["next_step"] == "request_review"
+        assert recovered.get_state(rejected_config).values["next_step"] == "request_review"
+        assert recovered.get_state(rejected_config).values["workflow"].action_id == rejected_id
