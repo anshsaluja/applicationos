@@ -205,19 +205,22 @@ def test_durable_plan_uses_action_thread_and_current_database_evidence(monkeypat
         lambda session: SimpleNamespace(get=lambda key: current["approval"]),
     )
 
+    from app.planning_graph import build_planning_graph
+
     class RecordingGraph:
         def __init__(self):
             self.calls = []
+            self.planner = build_planning_graph()
 
         def invoke(self, state, config):
             self.calls.append((state, config))
-            return {"next_step": "claim_outbox", "explanation": "Advisory only"}
+            return self.planner.invoke(state, config=config)
 
     graph = RecordingGraph()
     session = FakeSession()
     assert plan_persisted_workflow(session, action_id, graph=graph)["next_step"] == "claim_outbox"
     current["approval"] = ApprovalDecision(action_id=action_id, status=ApprovalStatus.REJECTED)
-    assert plan_persisted_workflow(session, action_id, graph=graph)["next_step"] == "claim_outbox"
+    assert plan_persisted_workflow(session, action_id, graph=graph)["next_step"] == "request_review"
     assert len(graph.calls) == 2
     assert graph.calls[0][1] == graph.calls[1][1] == {
         "configurable": {"thread_id": str(action_id)}
