@@ -8,13 +8,13 @@ from __future__ import annotations
 from uuid import UUID
 
 from .domain.approvals import ApprovalGateError, require_approved
+from .durable_planning import checkpoint_config
 from .persistence import (
     ApprovalRepository,
     SyntheticReceiptRow,
     WorkflowOutboxRow,
     WorkflowRepository,
 )
-from .durable_planning import checkpoint_config
 from .planning_graph import build_planning_graph
 
 
