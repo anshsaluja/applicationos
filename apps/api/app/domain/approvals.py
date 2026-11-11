@@ -62,5 +62,5 @@ def require_approved(decision: ApprovalDecision | None, action_id: UUID) -> None
     """Fail closed on missing, mismatched, pending, or rejected decisions."""
     if decision is None or decision.action_id != action_id:
         raise ApprovalGateError("No matching approval decision")
-    if decision.status != ApprovalStatus.APPROVED or not decision.reviewer_id:
+    if decision.status != ApprovalStatus.APPROVED or not (decision.reviewer_id or "").strip():
         raise ApprovalGateError("Action has not been approved")
