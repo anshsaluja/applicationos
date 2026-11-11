@@ -155,7 +155,20 @@ jobs:
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
       - name: Install Chromium for Playwright
-        run: npx playwright install --with-deps chromium
+        run: |
+          set -Eeuo pipefail
+          # Ubuntu package mirrors occasionally fail DNS resolution on hosted runners.
+          # Retry transient setup failures, but never skip browser tests or mask failure.
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Chromium installation failed after 3 attempts" >&2
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
       - name: Run browser regression tests
         run: npm run test:e2e
       - name: Upload browser failure artifacts
