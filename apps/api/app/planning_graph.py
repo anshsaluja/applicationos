@@ -46,14 +46,16 @@ def _route(state: PlanningState) -> dict[str, str]:
     raise ValueError(f"Unsupported workflow status: {status}")
 
 
-def build_planning_graph():
-    """Compile a deterministic graph with no external effects.
+def build_planning_graph(*, checkpointer=None):
+    """Compile a side-effect-free planner with an optional runtime checkpointer.
 
-    Checkpointing must be supplied by a durable runtime before using this
-    graph for resumed execution; this graph itself does not claim durability.
+    A production caller must provide a durable checkpointer and a stable
+    thread_id to resume a workflow. Without one, invocations are ephemeral.
+    Even with checkpoints, graph output never authorizes dispatch: the
+    transactional repository must revalidate approval and outbox evidence.
     """
     graph = StateGraph(PlanningState)
     graph.add_node("plan", _route)
     graph.add_edge(START, "plan")
     graph.add_edge("plan", END)
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
