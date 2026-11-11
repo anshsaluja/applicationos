@@ -159,3 +159,28 @@ def test_persisted_completion_rejects_foreign_approval(monkeypatch):
         SimpleNamespace(action_id=action_id, adapter="synthetic-noop", idempotency_key="safe-key"),
     )
     assert plan_persisted_workflow(session, action_id)["next_step"] == "reconcile"
+
+
+@pytest.mark.parametrize("reviewer_id", [None, "", "  "])
+def test_persisted_completion_requires_identifiable_reviewer(monkeypatch, reviewer_id):
+    """A forged approved flag without a reviewer cannot certify completion."""
+    action_id = uuid4()
+    workflow = WorkflowState(
+        action_id=action_id, idempotency_key="safe-key", status=WorkflowStatus.SUCCEEDED
+    )
+    approval = ApprovalDecision(
+        action_id=action_id, status=ApprovalStatus.APPROVED, reviewer_id=reviewer_id
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.WorkflowRepository",
+        lambda session: SimpleNamespace(get=lambda key: workflow),
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.ApprovalRepository",
+        lambda session: SimpleNamespace(get=lambda key: approval),
+    )
+    session = FakeSession(
+        SimpleNamespace(action_id=action_id, status="dispatched", idempotency_key="safe-key"),
+        SimpleNamespace(action_id=action_id, adapter="synthetic-noop", idempotency_key="safe-key"),
+    )
+    assert plan_persisted_workflow(session, action_id)["next_step"] == "reconcile"
