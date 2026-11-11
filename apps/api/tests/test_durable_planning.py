@@ -78,9 +78,8 @@ def test_checkpoint_setup_only_when_explicitly_requested(monkeypatch):
 
 
 def test_checkpoint_dsn_is_required():
-    with pytest.raises(ValueError, match="DSN"):
-        with durable_planning.postgres_planning_graph(" "):
-            pass
+    with pytest.raises(ValueError, match="DSN"), durable_planning.postgres_planning_graph(" "):
+        pass
 
 
 @pytest.mark.parametrize(
