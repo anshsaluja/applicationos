@@ -26,7 +26,7 @@ def _route(state: PlanningState) -> dict[str, str]:
     status = workflow.status
 
     if status == WorkflowStatus.SUCCEEDED:
-        return {"next_step": "complete", "explanation": "Execution receipt already recorded"}
+        return {"next_step": "reconcile", "explanation": "Success requires independent durable receipt verification"}
     if status == WorkflowStatus.RUNNING:
         return {"next_step": "reconcile", "explanation": "Running action requires durable receipt reconciliation"}
     if status == WorkflowStatus.FAILED:
