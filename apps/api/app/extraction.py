@@ -23,7 +23,8 @@ CONTRAST = re.compile(r"\s*(?:[,;]\s*|\s+)\b(?:but|however)\b[,]?[\s]*", re.IGNO
 # clauses still become pending review candidates rather than being inferred.
 WAIVER = re.compile(
     r"\b(?:not\s+required(?:\s+to)?|not\s+necessary(?:\s+to)?|"
-    r"(?:do|does)\s+not\s+need\s+to|no\s+need\s+to|need\s+not)\b",
+    r"(?:do|does)\s+not\s+need\s+to|(?:don[’\x27]t|doesn[’\x27]t)\s+need\s+to|"
+    r"no\s+need\s+to|need\s+not)\b",
     re.IGNORECASE,
 )
 
