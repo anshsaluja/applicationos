@@ -50,3 +50,17 @@ def test_postgres_checkpoint_survives_reopened_connection_and_isolates_threads()
         assert not recovered.get_state(checkpoint_config(other_id)).values
         # A persisted recommendation is never a dispatch authorization.
         assert "receipt" not in snapshot.values
+        # A recovered graph must re-evaluate fresh authorization evidence, not
+        # reuse the prior checkpoint's claim recommendation after revocation.
+        revoked = ApprovalDecision(
+            action_id=action_id, status=ApprovalStatus.REJECTED, reviewer_id="integration-reviewer"
+        )
+        denied = recovered.invoke(
+            {"workflow": workflow, "approval": revoked, "next_step": "", "explanation": ""},
+            config=config,
+        )
+        assert denied["next_step"] == "request_review"
+        assert recovered.get_state(config).values["approval"].status == ApprovalStatus.REJECTED
+
+        # Another thread must remain independent after the revoked thread advances.
+        assert not recovered.get_state(checkpoint_config(other_id)).values
