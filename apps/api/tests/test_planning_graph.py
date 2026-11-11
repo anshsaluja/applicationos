@@ -20,7 +20,8 @@ from app.planning_graph import build_planning_graph
         (WorkflowStatus.READY, ApprovalStatus.APPROVED, "claim_outbox"),
         (WorkflowStatus.RUNNING, ApprovalStatus.APPROVED, "reconcile"),
         (WorkflowStatus.FAILED, ApprovalStatus.APPROVED, "reconcile"),
-        (WorkflowStatus.SUCCEEDED, None, "complete"),
+        (WorkflowStatus.SUCCEEDED, None, "reconcile"),
+        (WorkflowStatus.SUCCEEDED, ApprovalStatus.APPROVED, "reconcile"),
     ],
 )
 def test_planning_graph_fails_closed(status, approval_status, expected):
