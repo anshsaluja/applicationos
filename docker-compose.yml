@@ -41,7 +41,9 @@ services:
   web:
     image: node:22-bookworm-slim
     working_dir: /workspace/apps/web
-    command: sh -c "npm install --no-audit --no-fund && npm run build && npm run start -- --hostname 0.0.0.0"
+    # The bind-mounted checkout is shared with the non-root CI runner. Until a
+    # tracked lockfile is introduced, do not create a root-owned package-lock.json.
+    command: sh -c "npm install --package-lock=false --no-audit --no-fund && npm run build && npm run start -- --hostname 0.0.0.0"
     volumes:
       - .:/workspace
       - web_node_modules:/workspace/apps/web/node_modules
