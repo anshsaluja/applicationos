@@ -58,3 +58,38 @@ test("real backend enforces human rejection before execution", async ({ page }) 
   await expect(page.getByText("Status: rejected")).toBeVisible();
   await expect(page.getByRole("button", { name: "Request human review" })).toBeDisabled();
 });
+
+
+test("real backend persists authorized approval without executing an external action", async ({ page }) => {
+  test.skip(process.env.APPLICATIONOS_REAL_E2E !== "1", "Requires disposable Compose stack");
+  const token = process.env.APPLICATIONOS_E2E_REVIEW_TOKEN;
+  test.skip(!token, "Requires disposable CI reviewer credential");
+
+  const actionId = crypto.randomUUID();
+  const key = `browser-approval-${actionId}`;
+  await page.goto("/");
+  await page.getByPlaceholder("Action UUID").fill(actionId);
+  await page.getByPlaceholder("Unique request key").fill(key);
+  await page.getByRole("button", { name: "Create checkpoint" }).click();
+  await expect(page.getByText("Status: pending")).toBeVisible();
+  await page.getByRole("button", { name: "Request human review" }).click();
+  await expect(page.getByText("Status: awaiting approval")).toBeVisible();
+
+  await page.getByLabel("Operator token (local development only)").fill(token!);
+  await page.getByLabel("Decision").selectOption("approved");
+  await page.getByLabel("Reason (optional)").fill("Synthetic reviewer verified the local checkpoint");
+  await page.getByRole("button", { name: "Record decision" }).click();
+  await expect(page.getByText("Approved and ready. No external action has been executed.")).toBeVisible();
+  await expect(page.getByText("Status: approved")).toBeVisible();
+  await expect(page.getByText(`Idempotency key: ${key}`)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Operator review" })).toHaveCount(0);
+
+  // Reload from PostgreSQL, not the browser's in-memory state.
+  await page.reload();
+  await page.getByPlaceholder("Action UUID").fill(actionId);
+  await page.getByRole("button", { name: "Check status" }).click();
+  await expect(page.getByText("Status: approved")).toBeVisible();
+  await expect(page.getByText(`Idempotency key: ${key}`)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request human review" })).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "Operator review" })).toHaveCount(0);
+});
