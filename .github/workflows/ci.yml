@@ -226,6 +226,7 @@ jobs:
       - name: Run real-backend Playwright provenance journey
         env:
           APPLICATIONOS_REAL_E2E: '1'
+          APPLICATIONOS_E2E_REVIEW_TOKEN: ci-compose-review-token-not-for-deployment
         run: |
           set -Eeuo pipefail
           cd apps/web
