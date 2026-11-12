@@ -369,6 +369,16 @@ jobs:
             -e APPLICATIONOS_SMOKE_REVIEW_TOKEN="$APPLICATIONOS_REVIEW_TOKEN" \
             -e APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION=local-only \
             api python /workspace/scripts/smoke_local_journey.py
+      - name: Upload Compose browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-playwright-failure-artifacts
+          path: |
+            apps/web/test-results/
+            apps/web/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Collect failure diagnostics
         if: failure()
         run: docker compose logs --no-color --tail=100
