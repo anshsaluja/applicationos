@@ -289,6 +289,36 @@ jobs:
             "SELECT count(*) FROM requirements")
           test "$documents_after" -eq "$documents_before"
           test "$requirements_after" -eq "$requirements_before"
+          # Browser-created human decisions must also survive an API process restart.
+          # Check both terminal decisions against the persisted HTTP representation,
+          # rather than trusting counts or the frontend's in-memory state.
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import urllib.request
+
+          for decision in ("approved", "rejected"):
+              sql = (
+                  "SELECT action_id FROM workflow_checkpoints "
+                  f"WHERE status = '{decision}' ORDER BY action_id LIMIT 1"
+              )
+              action_id = subprocess.check_output(
+                  ["docker", "compose", "exec", "-T", "postgres", "psql",
+                   "-U", "applicationos", "-d", "applicationos",
+                   "-v", "ON_ERROR_STOP=1", "-Atc", sql],
+                  text=True,
+              ).strip()
+              assert action_id, f"No persisted {decision} checkpoint after browser tests"
+              with urllib.request.urlopen(
+                  f"http://127.0.0.1:8000/v1/workflows/{action_id}", timeout=15
+              ) as response:
+                  checkpoint = json.load(response)
+              assert checkpoint["action_id"] == action_id
+              assert checkpoint["status"] == decision, (
+                  f"Restart lost {decision} decision: {checkpoint}"
+              )
+              assert checkpoint["idempotency_key"], "Missing persisted idempotency key"
+          PY
           # Read the exact pre-restart action through the restarted API.
           # The returned checkpoint must remain terminal and unchanged.
           status_after=$(curl --fail --silent --show-error "http://127.0.0.1:8000/v1/workflows/$action_id")
