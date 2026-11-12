@@ -236,6 +236,13 @@ jobs:
           before=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
             "SELECT count(*) FROM workflow_checkpoints")
           test "$before" -gt 0
+          # Check document and requirement persistence as well as workflow state.
+          documents_before=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+            "SELECT count(*) FROM documents")
+          requirements_before=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+            "SELECT count(*) FROM requirements")
+          test "$documents_before" -gt 0
+          test "$requirements_before" -gt 0
           # Pin a real completed synthetic workflow, not just the row count.
           # A count-only assertion can pass even when the wrong record survives.
           action_id=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
@@ -257,6 +264,12 @@ jobs:
           after=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
             "SELECT count(*) FROM workflow_checkpoints")
           test "$after" -eq "$before"
+          documents_after=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+            "SELECT count(*) FROM documents")
+          requirements_after=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+            "SELECT count(*) FROM requirements")
+          test "$documents_after" -eq "$documents_before"
+          test "$requirements_after" -eq "$requirements_before"
           # Read the exact pre-restart action through the restarted API.
           # The returned checkpoint must remain terminal and unchanged.
           status_after=$(curl --fail --silent --show-error "http://127.0.0.1:8000/v1/workflows/$action_id")
