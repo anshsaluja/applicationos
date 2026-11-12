@@ -63,6 +63,10 @@ def main():
     document = request("POST", "/v1/documents", payload, f"multipart/form-data; boundary={boundary}")
     assert document["id"]
     assert document["sha256"] == hashlib.sha256(synthetic).hexdigest(), "Uploaded bytes digest mismatch"
+    # Re-ingesting identical bytes must preserve the original document identity and provenance.
+    duplicate = request("POST", "/v1/documents", payload, f"multipart/form-data; boundary={boundary}")
+    assert duplicate["id"] == document["id"], "Duplicate upload created another document"
+    assert duplicate["sha256"] == document["sha256"], "Duplicate upload changed content digest"
     fetched = request("GET", "/v1/documents/" + document["id"])
     assert fetched["sha256"] == document["sha256"]
     sources = request("GET", "/v1/documents/" + document["id"] + "/requirement-sources")
