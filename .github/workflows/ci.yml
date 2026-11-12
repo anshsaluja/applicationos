@@ -230,6 +230,13 @@ jobs:
         run: |
           set -Eeuo pipefail
           cd apps/web
+          # Compose runs the web container as root and mounts node_modules from
+          # a named volume. The host-side mountpoint can therefore be root-owned,
+          # causing npm EACCES on the GitHub runner. Restore runner ownership
+          # before installing the separate host Playwright test dependencies.
+          if [ -d node_modules ]; then
+            sudo chown -R "$(id -u):$(id -g)" node_modules
+          fi
           npm install --no-audit --no-fund
           for attempt in 1 2 3; do
             if npx playwright install --with-deps chromium; then
