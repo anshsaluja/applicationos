@@ -4,6 +4,9 @@ import { expect, test } from "@playwright/test";
 // never run against a production API or with a real application document.
 test("real backend persists uploaded instructions and displays provenance", async ({ page }) => {
   test.skip(process.env.APPLICATIONOS_REAL_E2E !== "1", "Requires disposable Compose stack");
+  if (process.env.APPLICATIONOS_REAL_E2E === "1" && process.env.CI && !process.env.APPLICATIONOS_E2E_REVIEW_TOKEN) {
+    throw new Error("Compose E2E reviewer credential missing; fail closed rather than silently skipping approval coverage");
+  }
   const instructions = "Provide an official transcript for the synthetic applicant.";
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
@@ -22,8 +25,11 @@ test("real backend persists uploaded instructions and displays provenance", asyn
 
 test("real backend enforces human rejection before execution", async ({ page }) => {
   test.skip(process.env.APPLICATIONOS_REAL_E2E !== "1", "Requires disposable Compose stack");
+  if (process.env.APPLICATIONOS_REAL_E2E === "1" && process.env.CI && !process.env.APPLICATIONOS_E2E_REVIEW_TOKEN) {
+    throw new Error("Compose E2E reviewer credential missing; fail closed rather than silently skipping approval coverage");
+  }
   const token = process.env.APPLICATIONOS_E2E_REVIEW_TOKEN;
-  test.skip(!token, "Requires disposable CI reviewer credential");
+  if (!token) throw new Error("Real-backend E2E requires a disposable reviewer credential; refusing to skip approval tests");
 
   const actionId = crypto.randomUUID();
   await page.goto("/");
@@ -72,8 +78,11 @@ test("real backend enforces human rejection before execution", async ({ page }) 
 
 test("real backend persists authorized approval without executing an external action", async ({ page }) => {
   test.skip(process.env.APPLICATIONOS_REAL_E2E !== "1", "Requires disposable Compose stack");
+  if (process.env.APPLICATIONOS_REAL_E2E === "1" && process.env.CI && !process.env.APPLICATIONOS_E2E_REVIEW_TOKEN) {
+    throw new Error("Compose E2E reviewer credential missing; fail closed rather than silently skipping approval coverage");
+  }
   const token = process.env.APPLICATIONOS_E2E_REVIEW_TOKEN;
-  test.skip(!token, "Requires disposable CI reviewer credential");
+  if (!token) throw new Error("Real-backend E2E requires a disposable reviewer credential; refusing to skip approval tests");
 
   const actionId = crypto.randomUUID();
   const key = `browser-approval-${actionId}`;
