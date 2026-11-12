@@ -57,6 +57,16 @@ test("real backend enforces human rejection before execution", async ({ page }) 
   await page.getByRole("button", { name: "Check status" }).click();
   await expect(page.getByText("Status: failed")).toBeVisible();
   await expect(page.getByRole("button", { name: "Request human review" })).toBeDisabled();
+
+  // A terminal rejection must not be reversible by replaying an approval.
+  const replay = await page.request.post(`http://127.0.0.1:8000/v1/workflows/${actionId}/decision`, {
+    headers: { "X-Review-Token": token! },
+    data: { decision: "approved", reason: "Attempted reversal after rejection" },
+  });
+  expect(replay.status()).toBe(409);
+  const persisted = await page.request.get(`http://127.0.0.1:8000/v1/workflows/${actionId}`);
+  expect(persisted.ok()).toBeTruthy();
+  expect((await persisted.json()).status).toBe("failed");
 });
 
 
@@ -92,4 +102,16 @@ test("real backend persists authorized approval without executing an external ac
   await expect(page.getByText(`Idempotency key: ${key}`)).toBeVisible();
   await expect(page.getByRole("button", { name: "Request human review" })).toBeDisabled();
   await expect(page.getByRole("heading", { name: "Operator review" })).toHaveCount(0);
+
+  // Approval replay and conflicting rejection both fail closed after persistence.
+  for (const decision of ["approved", "rejected"]) {
+    const replay = await page.request.post(`http://127.0.0.1:8000/v1/workflows/${actionId}/decision`, {
+      headers: { "X-Review-Token": token! },
+      data: { decision, reason: "Duplicate terminal decision" },
+    });
+    expect(replay.status()).toBe(409);
+  }
+  const persisted = await page.request.get(`http://127.0.0.1:8000/v1/workflows/${actionId}`);
+  expect(persisted.ok()).toBeTruthy();
+  expect((await persisted.json()).status).toBe("ready");
 });
