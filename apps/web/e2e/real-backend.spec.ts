@@ -39,7 +39,7 @@ test("real backend enforces human rejection before execution", async ({ page }) 
   await page.getByLabel("Operator token (local development only)").fill("invalid-synthetic-review-token");
   await page.getByLabel("Decision").selectOption("approved");
   await page.getByRole("button", { name: "Record decision" }).click();
-  await expect(page.getByRole("alert")).toContainText("401");
+  await expect(page.getByRole("alert")).toContainText("403");
   await expect(page.getByText("Status: awaiting approval")).toBeVisible();
   await page.getByRole("button", { name: "Check status" }).click();
   await expect(page.getByText("Status: awaiting approval")).toBeVisible();
@@ -50,12 +50,12 @@ test("real backend enforces human rejection before execution", async ({ page }) 
   await page.getByLabel("Reason (required)").fill("Synthetic application requires manual correction");
   await page.getByRole("button", { name: "Record decision" }).click();
   await expect(page.getByText("Rejected. Workflow execution remains blocked.")).toBeVisible();
-  await expect(page.getByText("Status: rejected")).toBeVisible();
+  await expect(page.getByText("Status: failed")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Operator review" })).toHaveCount(0);
   await page.reload();
   await page.getByPlaceholder("Action UUID").fill(actionId);
   await page.getByRole("button", { name: "Check status" }).click();
-  await expect(page.getByText("Status: rejected")).toBeVisible();
+  await expect(page.getByText("Status: failed")).toBeVisible();
   await expect(page.getByRole("button", { name: "Request human review" })).toBeDisabled();
 });
 
@@ -80,7 +80,7 @@ test("real backend persists authorized approval without executing an external ac
   await page.getByLabel("Reason (optional)").fill("Synthetic reviewer verified the local checkpoint");
   await page.getByRole("button", { name: "Record decision" }).click();
   await expect(page.getByText("Approved and ready. No external action has been executed.")).toBeVisible();
-  await expect(page.getByText("Status: approved")).toBeVisible();
+  await expect(page.getByText("Status: ready")).toBeVisible();
   await expect(page.getByText(`Idempotency key: ${key}`)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Operator review" })).toHaveCount(0);
 
@@ -88,7 +88,7 @@ test("real backend persists authorized approval without executing an external ac
   await page.reload();
   await page.getByPlaceholder("Action UUID").fill(actionId);
   await page.getByRole("button", { name: "Check status" }).click();
-  await expect(page.getByText("Status: approved")).toBeVisible();
+  await expect(page.getByText("Status: ready")).toBeVisible();
   await expect(page.getByText(`Idempotency key: ${key}`)).toBeVisible();
   await expect(page.getByRole("button", { name: "Request human review" })).toBeDisabled();
   await expect(page.getByRole("heading", { name: "Operator review" })).toHaveCount(0);
