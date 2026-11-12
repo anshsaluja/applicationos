@@ -35,6 +35,16 @@ test("real backend enforces human rejection before execution", async ({ page }) 
 
   await page.getByRole("button", { name: "Request human review" }).click();
   await expect(page.getByRole("heading", { name: "Operator review" })).toBeVisible();
+  // A forged reviewer credential must fail closed without changing the checkpoint.
+  await page.getByLabel("Operator token (local development only)").fill("invalid-synthetic-review-token");
+  await page.getByLabel("Decision").selectOption("approved");
+  await page.getByRole("button", { name: "Record decision" }).click();
+  await expect(page.getByRole("alert")).toContainText("401");
+  await expect(page.getByText("Status: awaiting approval")).toBeVisible();
+  await page.getByRole("button", { name: "Check status" }).click();
+  await expect(page.getByText("Status: awaiting approval")).toBeVisible();
+
+  // A valid reviewer can subsequently reject the same persisted checkpoint.
   await page.getByLabel("Operator token (local development only)").fill(token!);
   await page.getByLabel("Decision").selectOption("rejected");
   await page.getByLabel("Reason (required)").fill("Synthetic application requires manual correction");
@@ -42,6 +52,9 @@ test("real backend enforces human rejection before execution", async ({ page }) 
   await expect(page.getByText("Rejected. Workflow execution remains blocked.")).toBeVisible();
   await expect(page.getByText("Status: rejected")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Operator review" })).toHaveCount(0);
+  await page.reload();
+  await page.getByPlaceholder("Action UUID").fill(actionId);
   await page.getByRole("button", { name: "Check status" }).click();
   await expect(page.getByText("Status: rejected")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request human review" })).toBeDisabled();
 });
