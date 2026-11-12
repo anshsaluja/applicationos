@@ -289,7 +289,7 @@ jobs:
             "SELECT count(*) FROM requirements")
           test "$documents_after" -eq "$documents_before"
           test "$requirements_after" -eq "$requirements_before"
-          # Browser-created human decisions must also survive an API process restart.
+          # Browser-created approval outcomes (ready/failed) must survive an API restart.
           # Check both terminal decisions against the persisted HTTP representation,
           # rather than trusting counts or the frontend's in-memory state.
           python3 - <<'PY'
@@ -297,7 +297,7 @@ jobs:
           import subprocess
           import urllib.request
 
-          for decision in ("approved", "rejected"):
+          for decision in ("ready", "failed"):
               sql = (
                   "SELECT action_id FROM workflow_checkpoints "
                   f"WHERE status = '{decision}' ORDER BY action_id LIMIT 1"
