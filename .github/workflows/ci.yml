@@ -274,6 +274,37 @@ jobs:
           # The returned checkpoint must remain terminal and unchanged.
           status_after=$(curl --fail --silent --show-error "http://127.0.0.1:8000/v1/workflows/$action_id")
           test "$status_after" = "$status_before"
+          # Replaying the original idempotent create after process restart must
+          # resolve to the persisted terminal checkpoint, not create a new one.
+          python3 - "$action_id" "$status_before" <<'PY'
+          import json
+          import sys
+          import urllib.error
+          import urllib.request
+          from uuid import uuid4
+
+          action_id, original_json = sys.argv[1:]
+          original = json.loads(original_json)
+          key = original["idempotency_key"]
+          def create(action, idem):
+              payload = json.dumps({"action_id": action, "idempotency_key": idem}).encode()
+              req = urllib.request.Request(
+                  "http://127.0.0.1:8000/v1/workflows", data=payload,
+                  headers={"Content-Type": "application/json"}, method="POST",
+              )
+              return urllib.request.urlopen(req, timeout=15)
+
+          with create(action_id, key) as response:
+              replay = json.load(response)
+          assert replay["action_id"] == action_id, "Restart replay changed action identity"
+          assert replay["status"] == "succeeded", "Restart replay lost terminal status"
+          assert replay["idempotency_key"] == key, "Restart replay changed idempotency key"
+          try:
+              with create(str(uuid4()), key):
+                  raise AssertionError("Restart allowed conflicting idempotency key")
+          except urllib.error.HTTPError as exc:
+              assert exc.code == 409, f"Expected 409 for conflicting replay, got {exc.code}"
+          PY
           docker compose exec -T \
             -e APPLICATIONOS_SMOKE_REVIEW_TOKEN="$APPLICATIONOS_REVIEW_TOKEN" \
             -e APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION=local-only \
