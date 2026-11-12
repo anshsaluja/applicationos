@@ -223,6 +223,24 @@ jobs:
             -e APPLICATIONOS_SMOKE_REVIEW_TOKEN="$APPLICATIONOS_REVIEW_TOKEN" \
             -e APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION=local-only \
             api python /workspace/scripts/smoke_local_journey.py
+      - name: Run real-backend Playwright provenance journey
+        env:
+          APPLICATIONOS_REAL_E2E: '1'
+        run: |
+          set -Eeuo pipefail
+          cd apps/web
+          npm install --no-audit --no-fund
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Chromium setup failed after three attempts" >&2
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
+          npx playwright test e2e/real-backend.spec.ts
       - name: Verify pgvector extension and persisted records
         run: |
           set -Eeuo pipefail
