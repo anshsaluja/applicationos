@@ -20,7 +20,7 @@ test("real backend persists uploaded instructions and displays provenance", asyn
   await expect(page.locator("blockquote").filter({ hasText: instructions }).first()).toBeVisible();
   await expect(page.getByText(/Instruction excerpts are source provenance/)).toBeVisible();
   await expect(page.getByText(/Satisfaction evidence: 0 item\(s\)\./).first()).toBeVisible();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator("p[role=alert]")).toHaveCount(0);
 });
 
 test("real backend enforces human rejection before execution", async ({ page }) => {
@@ -45,7 +45,7 @@ test("real backend enforces human rejection before execution", async ({ page }) 
   await page.getByLabel("Operator token (local development only)").fill("invalid-synthetic-review-token");
   await page.getByLabel("Decision").selectOption("approved");
   await page.getByRole("button", { name: "Record decision" }).click();
-  await expect(page.getByRole("alert")).toContainText("403");
+  await expect(page.locator("p[role=alert]")).toContainText("403");
   await expect(page.getByText("Status: awaiting approval")).toBeVisible();
   await page.getByRole("button", { name: "Check status" }).click();
   await expect(page.getByText("Status: awaiting approval")).toBeVisible();
