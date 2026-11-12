@@ -237,10 +237,11 @@ jobs:
           if [ -d node_modules ]; then
             sudo chown -R "$(id -u):$(id -g)" node_modules
           fi
-          # npm install rewrites package-lock.json, which the root-run Compose
-          # frontend may own. CI must install exactly the committed lockfile
-          # without mutating it; npm ci also catches lockfile drift.
-          npm ci --no-audit --no-fund
+          # This repository does not commit apps/web/package-lock.json, so
+          # npm ci cannot run. The Compose bind mount can also leave a
+          # root-owned lockfile on the runner. Install without reading or
+          # writing a lockfile until a tracked lockfile is introduced.
+          npm install --package-lock=false --no-audit --no-fund
           for attempt in 1 2 3; do
             if npx playwright install --with-deps chromium; then
               break
