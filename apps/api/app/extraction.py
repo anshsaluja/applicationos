@@ -27,7 +27,7 @@ CLAUSE_SEPARATOR = re.compile(r"\s*;\s*")
 # Split independently stated obligations joined by "and" without splitting
 # ordinary object lists such as "upload a passport and a photo".
 INDEPENDENT_OBLIGATION = re.compile(
-    r"\s+and\s+(?=(?:you|applicants?|users?|the\s+applicant|the\s+user)\s+"
+    r"\s+and\s+(?=(?:(?:you|applicants?|users?|the\s+applicant|the\s+user)\s+)?"
     r"(?:must|shall|need(?:s)?\s+to)\b)",
     re.IGNORECASE,
 )
