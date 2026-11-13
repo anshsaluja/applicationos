@@ -23,7 +23,7 @@ def parse_cors_origins(value: str) -> list[str]:
         origin = item.strip().rstrip("/")
         if not origin:
             continue
-        parsed = urlsplit(origin)
+        # Backslashes and controls have inconsistent URL interpretations across clients.\n        if any(ch == "\\\\" or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in origin):\n            raise ValueError("CORS_ALLOWED_ORIGINS contains unsafe URL characters")\n        parsed = urlsplit(origin)
         if (
             parsed.scheme not in {"http", "https"}
             or not parsed.hostname
@@ -32,7 +32,7 @@ def parse_cors_origins(value: str) -> list[str]:
             or parsed.path
             or parsed.query
             or parsed.fragment
-            or "*" in origin
+            or "*" in origin\n            or (parsed.netloc.endswith(":") and not parsed.netloc.endswith("]:"))
         ):
             raise ValueError("CORS_ALLOWED_ORIGINS must contain explicit HTTP(S) origins")
         try:
