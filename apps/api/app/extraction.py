@@ -16,7 +16,7 @@ CLAUSE = re.compile(
 )
 SENTENCE = re.compile(r"[^.!?\n]+(?:[.!?]|$)")
 # Split contrasting instructions so a waiver cannot mask a separate obligation.
-CONTRAST = re.compile(r"\s*(?:[,;]\s*|\s+)\b(?:but|however)\b[,]?[\s]*", re.IGNORECASE)
+CONTRAST = re.compile(r"\s*(?:[,;]\s*)?\b(?:but|however)\b[,]?\s*", re.IGNORECASE)
 
 
 # Explicit waivers are not requirements. Keep this conservative: ambiguous
