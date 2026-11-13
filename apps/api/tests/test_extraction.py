@@ -148,3 +148,29 @@ def test_conjunction_inside_document_list_remains_single_requirement():
     assert [item.description for item in requirements] == [
         "You must upload a passport and a photograph."
     ]
+
+
+def test_subject_elided_mandatory_clause_survives_waiver():
+    requirements = extract_requirements(
+        uuid4(),
+        "short-conjunction.txt",
+        "You do not need to upload a passport and must provide proof of income. "
+        "Applicants need not submit a photo and shall include a signed declaration.",
+    )
+    assert [item.description for item in requirements] == [
+        "must provide proof of income.",
+        "shall include a signed declaration.",
+    ]
+    assert all(item.status.value == "pending" for item in requirements)
+    assert all(item.evidence == [] for item in requirements)
+
+
+def test_coordinated_document_objects_do_not_split():
+    requirements = extract_requirements(
+        uuid4(),
+        "objects.txt",
+        "You must provide a passport and a photograph.",
+    )
+    assert [item.description for item in requirements] == [
+        "You must provide a passport and a photograph."
+    ]
