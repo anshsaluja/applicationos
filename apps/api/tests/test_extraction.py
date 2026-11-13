@@ -125,3 +125,26 @@ def test_semicolon_clauses_deduplicate_and_keep_stable_ids():
     assert len(first) == 1
     assert first[0].description == "Upload a photo ID"
     assert first[0].id == second[0].id
+
+
+def test_conjunction_waiver_cannot_hide_independent_obligation():
+    requirements = extract_requirements(
+        uuid4(),
+        "conjoined.txt",
+        "You do not need to upload a passport and you must provide proof of income. "
+        "A photograph is not required and applicants shall submit a signed consent form.",
+    )
+    assert [item.description for item in requirements] == [
+        "you must provide proof of income.",
+        "applicants shall submit a signed consent form.",
+    ]
+    assert all(item.evidence == [] for item in requirements)
+
+
+def test_conjunction_inside_document_list_remains_single_requirement():
+    requirements = extract_requirements(
+        uuid4(), "list.txt", "You must upload a passport and a photograph."
+    )
+    assert [item.description for item in requirements] == [
+        "You must upload a passport and a photograph."
+    ]
