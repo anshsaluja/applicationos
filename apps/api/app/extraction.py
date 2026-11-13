@@ -21,7 +21,7 @@ CONTRAST = re.compile(r"\s*(?:[,;]\s*|\s+)\b(?:but|however)\b[,]?[\s]*", re.IGNO
 
 # Explicit waivers are not requirements. Keep this conservative: ambiguous
 # clauses still become pending review candidates rather than being inferred.
-WAIVER = re.compile(
+# Semicolon-separated clauses can contain independent waivers and obligations.\n# Keep each clause separate so an optional item cannot suppress a required one.\nCLAUSE_SEPARATOR = re.compile(r"\s*;\s*")\n\nWAIVER = re.compile(
     r"\b(?:not\s+required(?:\s+to)?|not\s+necessary(?:\s+to)?|"
     r"(?:do|does)\s+not\s+need\s+to|(?:don[’\x27]t|doesn[’\x27]t)\s+need\s+to|"
     r"no\s+need\s+to|need\s+not)\b",
@@ -35,7 +35,7 @@ def extract_requirements(document_id: UUID, filename: str, text: str) -> list[Re
     seen: set[str] = set()
     for match in SENTENCE.finditer(text):
         sentence = match.group().strip()
-        for clause in CONTRAST.split(sentence):
+        for clause in (part for section in CLAUSE_SEPARATOR.split(sentence) for part in CONTRAST.split(section)):
             excerpt = clause.strip()
             normalized = " ".join(excerpt.casefold().split()).rstrip(".!?")
             if not excerpt or not CLAUSE.search(excerpt) or WAIVER.search(excerpt) or normalized in seen:
