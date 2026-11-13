@@ -40,7 +40,10 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
             raise HTTPException(status_code=422, detail="Plain-text document must be valid UTF-8") from exc
     else:
         text = _extract_pdf(data)
-    # Bound extracted text before scanning it or creating persisted provenance.\n    if len(text) > MAX_EXTRACTED_CHARACTERS:\n        raise HTTPException(status_code=413, detail="Extracted document text exceeds limit")\n    # Reject binary/control-character payloads masquerading as readable text.
+    # Bound extracted text before scanning it or creating persisted provenance.
+    if len(text) > MAX_EXTRACTED_CHARACTERS:
+        raise HTTPException(status_code=413, detail="Extracted document text exceeds limit")
+    # Reject binary/control-character payloads masquerading as readable text.
     # Preserve tabs, newlines, and carriage returns for document layout.
     if any(unicodedata.category(ch) == "Cc" and ch not in "\t\n\r" for ch in text):
         raise HTTPException(status_code=422, detail="Document contains unsupported control characters")
@@ -53,8 +56,6 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
     # Fail closed instead of presenting misleading provenance to reviewers.
     if any(unicodedata.category(ch) == "Cf" for ch in text):
         raise HTTPException(status_code=422, detail="Document contains unsupported Unicode formatting")
-    if len(text) > MAX_EXTRACTED_CHARACTERS:
-        raise HTTPException(status_code=413, detail="Extracted document text exceeds limit")
     if not text.strip():
         raise HTTPException(status_code=422, detail="No extractable text found")
     return IngestedDocument(id=uuid4(), filename=_safe_filename(upload.filename), media_type=media_type, sha256=hashlib.sha256(data).hexdigest(), text=text.strip())
