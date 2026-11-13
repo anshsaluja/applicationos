@@ -229,3 +229,20 @@ def test_preserves_normal_unicode_and_document_layout():
     )
     assert response.status_code == 200
     assert response.json()["text"] == payload.decode("utf-8")
+
+
+def test_oversized_pdf_text_is_rejected_before_unicode_validation(monkeypatch):
+    """An oversized extracted payload must fail the size gate even if it has controls."""
+    from app import documents
+
+    monkeypatch.setattr(
+        documents,
+        "_extract_pdf",
+        lambda _data: "\\x00" + "A" * documents.MAX_EXTRACTED_CHARACTERS,
+    )
+    response = client.post(
+        "/v1/documents",
+        files={"file": ("large.pdf", b"%PDF-1.7", "application/pdf")},
+    )
+    assert response.status_code == 413
+    assert response.json()["detail"] == "Extracted document text exceeds limit"
