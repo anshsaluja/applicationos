@@ -376,6 +376,16 @@ class WorkflowOutboxRepository:
         if row is None:
             raise WorkflowTransitionError("Outbox intent not found")
         if row.status == "dispatched":
+            if synthetic_receipt:
+                receipt = self.session.get(SyntheticReceiptRow, action_id)
+                if (
+                    receipt is None
+                    or receipt.idempotency_key != row.idempotency_key
+                    or receipt.adapter != "synthetic-noop"
+                ):
+                    raise WorkflowTransitionError(
+                        "Verified synthetic receipt required for idempotent dispatch confirmation"
+                    )
             return row
         if row.status != "claimed":
             raise WorkflowTransitionError("Only claimed intents can be completed")
