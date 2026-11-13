@@ -354,12 +354,7 @@ jobs:
               )
               return urllib.request.urlopen(req, timeout=15)
 
-          with create(action_id, key) as response:
-              replay = json.load(response)
-          assert replay["action_id"] == action_id, "Restart replay changed action identity"
-          assert replay["status"] == "succeeded", "Restart replay lost terminal status"
-          assert replay["idempotency_key"] == key, "Restart replay changed idempotency key"
-          # Idempotent replay must not silently insert another checkpoint.
+          # A successful replay must be read-only too, not merely return the same ID.
           import subprocess
           def checkpoint_count():
               return int(subprocess.check_output(
@@ -367,8 +362,14 @@ jobs:
                    "-U", "applicationos", "-d", "applicationos",
                    "-v", "ON_ERROR_STOP=1", "-Atc",
                    "SELECT count(*) FROM workflow_checkpoints"], text=True).strip())
-          # The count is checked across the conflicting replay below as well.
+          count_before_replay = checkpoint_count()
+          with create(action_id, key) as response:
+              replay = json.load(response)
+          assert replay["action_id"] == action_id, "Restart replay changed action identity"
+          assert replay["status"] == "succeeded", "Restart replay lost terminal status"
+          assert replay["idempotency_key"] == key, "Restart replay changed idempotency key"
           count_after_replay = checkpoint_count()
+          assert count_after_replay == count_before_replay, "Successful replay created a checkpoint"
           try:
               with create(str(uuid4()), key):
                   raise AssertionError("Restart allowed conflicting idempotency key")
