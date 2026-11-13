@@ -14,7 +14,13 @@ CLAUSE = re.compile(
     r"\b(?:must|shall|required|need to|needs to|provide|submit|upload|include)\b",
     re.IGNORECASE,
 )
-SENTENCE = re.compile(r"[^.!?\n]+(?:[.!?]|$)")
+SENTENCE = re.compile(r"[^.!?\\n]+(?:[.!?]|$)")
+# Only sentence-initial commands count as imperatives. Descriptive statements
+# such as "We provide support" or "You may upload a photo" are not obligations.
+IMPERATIVE = re.compile(
+    r"^(?:please\\s+)?(?:provide|submit|upload|include)\\b",
+    re.IGNORECASE,
+)
 # Split contrasting instructions so a waiver cannot mask a separate obligation.
 CONTRAST = re.compile(r"\s*(?:[,;]\s*)?\b(?:but|however)\b[,]?\s*", re.IGNORECASE)
 
