@@ -174,3 +174,29 @@ def test_coordinated_document_objects_do_not_split():
     assert [item.description for item in requirements] == [
         "You must provide a passport and a photograph."
     ]
+
+
+def test_descriptive_action_verbs_are_not_misread_as_requirements():
+    requirements = extract_requirements(
+        uuid4(),
+        "overview.txt",
+        "We provide support during business hours. "
+        "You may upload a photograph for your profile. "
+        "The portal includes an optional checklist. "
+        "Please submit a signed consent form. "
+        "You must provide proof of address.",
+    )
+    assert [item.description for item in requirements] == [
+        "Please submit a signed consent form.",
+        "You must provide proof of address.",
+    ]
+    assert all(item.evidence == [] for item in requirements)
+
+
+def test_imperative_action_verbs_remain_supported():
+    requirements = extract_requirements(
+        uuid4(), "instructions.txt",
+        "Provide an ID. Submit a form. Upload proof of address. Include a signature.",
+    )
+    assert len(requirements) == 4
+    assert all(item.status.value == "pending" for item in requirements)
