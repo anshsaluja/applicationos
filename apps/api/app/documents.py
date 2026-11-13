@@ -67,7 +67,10 @@ def _extract_pdf(data: bytes) -> str:
             extracted_length = 0
             for page in document:
                 page_text = page.get_text()
-                extracted_length += len(page_text)
+                # Account for the two newlines inserted between pages as well as
+                # the extracted characters; otherwise a many-page PDF can
+                # exceed the public text limit after joining the pages.
+                extracted_length += len(page_text) + (2 if parts else 0)
                 if extracted_length > MAX_EXTRACTED_CHARACTERS:
                     raise HTTPException(status_code=413, detail="Extracted PDF text exceeds limit")
                 parts.append(page_text)
