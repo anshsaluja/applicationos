@@ -684,6 +684,10 @@ class WorkflowRepository:
                 )
             if outbox.status in {"pending", "claimed"}:
                 outbox.status = "quarantined"
+            elif outbox.status != "quarantined":
+                # Unknown persisted states must not be treated as recovered.
+                # Leave the checkpoint RUNNING for explicit operator inspection.
+                raise WorkflowTransitionError("Unknown outbox state requires manual reconciliation")
         updated = transition(current, WorkflowStatus.FAILED)
         row.status = updated.status.value
         row.last_error = reason[:2000]
