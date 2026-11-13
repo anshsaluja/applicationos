@@ -53,3 +53,21 @@ def test_recovery_without_outbox_fails_checkpoint_only():
     result = repository.recover_interrupted(action_id)
     assert result.status.value == "failed"
     session.flush.assert_called_once()
+
+
+@pytest.mark.parametrize("status", ["unknown", "retrying", ""])
+def test_recovery_rejects_unknown_persisted_outbox_status(status):
+    repository, workflow, outbox, session, action_id = make_repository(status)
+    with pytest.raises(WorkflowTransitionError, match="Unknown outbox state"):
+        repository.recover_interrupted(action_id)
+    assert workflow.status == "running"
+    assert outbox.status == status
+    session.flush.assert_not_called()
+
+
+def test_recovery_accepts_already_quarantined_outbox_without_replay():
+    repository, workflow, outbox, session, action_id = make_repository("quarantined")
+    result = repository.recover_interrupted(action_id)
+    assert result.status.value == "failed"
+    assert outbox.status == "quarantined"
+    session.flush.assert_called_once()
