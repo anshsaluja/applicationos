@@ -207,3 +207,25 @@ def test_pdf_extraction_limit_includes_interpage_separators(monkeypatch):
     extracted = documents._extract_pdf(b"%PDF-1.7")
     assert len(extracted) == documents.MAX_EXTRACTED_CHARACTERS
     assert extracted.endswith("\n\nB")
+
+
+def test_rejects_invisible_unicode_formatting_in_text_upload():
+    # Zero-width characters can make stored provenance differ from what a
+    # human reviewer sees, even when the UTF-8 payload is otherwise valid.
+    for hidden in ("\u200b", "\u00ad", "\u2060"):
+        payload = f"You must pro{hidden}vide proof of address.".encode("utf-8")
+        response = client.post(
+            "/v1/documents",
+            files={"file": ("hidden.txt", payload, "text/plain")},
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Document contains unsupported Unicode formatting"
+
+
+def test_preserves_normal_unicode_and_document_layout():
+    payload = "Submit a résumé.\nProvide an ID.\tThank you.".encode("utf-8")
+    response = client.post(
+        "/v1/documents", files={"file": ("résumé.txt", payload, "text/plain")}
+    )
+    assert response.status_code == 200
+    assert response.json()["text"] == payload.decode("utf-8")
