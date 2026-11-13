@@ -359,11 +359,22 @@ jobs:
           assert replay["action_id"] == action_id, "Restart replay changed action identity"
           assert replay["status"] == "succeeded", "Restart replay lost terminal status"
           assert replay["idempotency_key"] == key, "Restart replay changed idempotency key"
+          # Idempotent replay must not silently insert another checkpoint.
+          import subprocess
+          def checkpoint_count():
+              return int(subprocess.check_output(
+                  ["docker", "compose", "exec", "-T", "postgres", "psql",
+                   "-U", "applicationos", "-d", "applicationos",
+                   "-v", "ON_ERROR_STOP=1", "-Atc",
+                   "SELECT count(*) FROM workflow_checkpoints"], text=True).strip())
+          # The count is checked across the conflicting replay below as well.
+          count_after_replay = checkpoint_count()
           try:
               with create(str(uuid4()), key):
                   raise AssertionError("Restart allowed conflicting idempotency key")
           except urllib.error.HTTPError as exc:
               assert exc.code == 409, f"Expected 409 for conflicting replay, got {exc.code}"
+          assert checkpoint_count() == count_after_replay, "Conflicting replay created a checkpoint"
           PY
           docker compose exec -T \
             -e APPLICATIONOS_SMOKE_REVIEW_TOKEN="$APPLICATIONOS_REVIEW_TOKEN" \
