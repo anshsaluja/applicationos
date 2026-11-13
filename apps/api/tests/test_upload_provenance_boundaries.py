@@ -55,3 +55,24 @@ def test_filename_sanitization_does_not_change_document_digest():
     assert result.filename == "hidden.txt"
     assert result.text == "Submit proof of address"
     assert result.sha256 == hashlib.sha256(data).hexdigest()
+
+
+def test_accepts_maximum_extracted_text_and_hashes_original_bytes():
+    # The extracted-character ceiling is inclusive and distinct from the 8 MiB
+    # upload limit. A valid boundary document must remain ingestible.
+    from app.documents import MAX_EXTRACTED_CHARACTERS
+
+    data = b"A" * MAX_EXTRACTED_CHARACTERS
+    result = ingest(data, filename="boundary.txt")
+    assert len(result.text) == MAX_EXTRACTED_CHARACTERS
+    assert result.sha256 == hashlib.sha256(data).hexdigest()
+
+
+def test_rejects_one_character_beyond_extracted_text_limit():
+    from app.documents import MAX_EXTRACTED_CHARACTERS
+
+    data = b"A" * (MAX_EXTRACTED_CHARACTERS + 1)
+    with pytest.raises(HTTPException) as error:
+        ingest(data)
+    assert error.value.status_code == 413
+    assert "text" in error.value.detail.lower()
