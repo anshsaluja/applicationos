@@ -98,3 +98,30 @@ def test_contracted_waivers_do_not_create_false_requirements():
         "You must not upload confidential records.",
     ]
     assert all(not item.evidence for item in requirements)
+
+
+def test_semicolon_waiver_cannot_hide_independent_mandatory_requirement():
+    source = uuid4()
+    requirements = extract_requirements(
+        source,
+        "mixed-clauses.txt",
+        "You do not need to upload a passport; you must provide proof of income. "
+        "Submit a signed consent form; no need to submit a second photograph.",
+    )
+    assert [item.description for item in requirements] == [
+        "you must provide proof of income.",
+        "Submit a signed consent form",
+    ]
+    assert all(item.status.value == "pending" for item in requirements)
+    assert all(item.evidence == [] for item in requirements)
+    assert all(item.id.version == 5 for item in requirements)
+
+
+def test_semicolon_clauses_deduplicate_and_keep_stable_ids():
+    source = uuid4()
+    text = "Upload a photo ID; Upload a photo ID; You do not need to upload a passport."
+    first = extract_requirements(source, "one.txt", text)
+    second = extract_requirements(source, "renamed.txt", text)
+    assert len(first) == 1
+    assert first[0].description == "Upload a photo ID"
+    assert first[0].id == second[0].id
