@@ -238,7 +238,7 @@ def test_oversized_pdf_text_is_rejected_before_unicode_validation(monkeypatch):
     monkeypatch.setattr(
         documents,
         "_extract_pdf",
-        lambda _data: "\\x00" + "A" * documents.MAX_EXTRACTED_CHARACTERS,
+        lambda _data: "\x00" + "A" * documents.MAX_EXTRACTED_CHARACTERS,
     )
     response = client.post(
         "/v1/documents",
