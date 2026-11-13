@@ -11,7 +11,7 @@ from app.main import parse_cors_origins
         "http://example.com\\@attacker.example",
         "http://example.com:",
         "http://[::1]:",
-        "http://example.com\t",
+        "http://exa\tmple.com",
         "http://example.com\nattacker.example",
         "https://example.com/path",
         "https://user@example.com",
