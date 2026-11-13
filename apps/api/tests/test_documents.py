@@ -213,7 +213,7 @@ def test_rejects_invisible_unicode_formatting_in_text_upload():
     # Zero-width characters can make stored provenance differ from what a
     # human reviewer sees, even when the UTF-8 payload is otherwise valid.
     for hidden in ("\u200b", "\u00ad", "\u2060"):
-        payload = f"You must pro{hidden}vide proof of address.".encode("utf-8")
+        payload = f"You must pro{hidden}vide proof of address.".encode()
         response = client.post(
             "/v1/documents",
             files={"file": ("hidden.txt", payload, "text/plain")},
@@ -223,7 +223,7 @@ def test_rejects_invisible_unicode_formatting_in_text_upload():
 
 
 def test_preserves_normal_unicode_and_document_layout():
-    payload = "Submit a résumé.\nProvide an ID.\tThank you.".encode("utf-8")
+    payload = "Submit a résumé.\nProvide an ID.\tThank you.".encode()
     response = client.post(
         "/v1/documents", files={"file": ("résumé.txt", payload, "text/plain")}
     )
