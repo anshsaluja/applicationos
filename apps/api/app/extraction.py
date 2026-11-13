@@ -11,7 +11,7 @@ from uuid import UUID, uuid5
 from .domain.models import Evidence, Requirement
 
 CLAUSE = re.compile(
-    r"\b(?:must|shall|required|need to|needs to|provide|submit|upload|include)\b",
+    r"\b(?:must|shall|required|need to|needs to)\b",
     re.IGNORECASE,
 )
 SENTENCE = re.compile(r"[^.!?\n]+(?:[.!?]|$)")
