@@ -157,3 +157,53 @@ def test_rejects_excessive_extracted_pdf_text(monkeypatch):
     )
     assert response.status_code == 413
     assert response.json()["detail"] == "Extracted PDF text exceeds limit"
+
+
+def test_pdf_extraction_limit_includes_interpage_separators(monkeypatch):
+    """Page separators count toward the same bound as extracted page text."""
+    import fitz
+    import pytest
+    from fastapi import HTTPException
+
+    from app import documents
+
+    class FakePage:
+        def __init__(self, text):
+            self.text = text
+
+        def get_text(self):
+            return self.text
+
+    class FakePDF:
+        needs_pass = False
+
+        def __init__(self, pages):
+            self.pages = [FakePage(text) for text in pages]
+
+        def __len__(self):
+            return len(self.pages)
+
+        def __iter__(self):
+            return iter(self.pages)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    # Two individually valid pages exceed the maximum only after the
+    # newline separator is inserted.
+    pages = ["A" * (documents.MAX_EXTRACTED_CHARACTERS - 1), "B"]
+    monkeypatch.setattr(fitz, "open", lambda **_kwargs: FakePDF(pages))
+    with pytest.raises(HTTPException) as exc:
+        documents._extract_pdf(b"%PDF-1.7")
+    assert exc.value.status_code == 413
+    assert exc.value.detail == "Extracted PDF text exceeds limit"
+
+    # Exactly at the cap (including separators) must still be accepted.
+    pages = ["A" * (documents.MAX_EXTRACTED_CHARACTERS - 3), "B"]
+    monkeypatch.setattr(fitz, "open", lambda **_kwargs: FakePDF(pages))
+    extracted = documents._extract_pdf(b"%PDF-1.7")
+    assert len(extracted) == documents.MAX_EXTRACTED_CHARACTERS
+    assert extracted.endswith("\n\nB")
