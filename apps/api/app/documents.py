@@ -48,6 +48,11 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
     # Reject it rather than displaying a misleading excerpt to reviewers.
     if any("\u202a" <= ch <= "\u202e" or "\u2066" <= ch <= "\u2069" for ch in text):
         raise HTTPException(status_code=422, detail="Document contains unsupported bidirectional formatting")
+    # Invisible Unicode format controls (including zero-width joiners and soft
+    # hyphens) can conceal or alter the apparent wording of requirements.
+    # Fail closed instead of presenting misleading provenance to reviewers.
+    if any(unicodedata.category(ch) == "Cf" for ch in text):
+        raise HTTPException(status_code=422, detail="Document contains unsupported Unicode formatting")
     if len(text) > MAX_EXTRACTED_CHARACTERS:
         raise HTTPException(status_code=413, detail="Extracted document text exceeds limit")
     if not text.strip():
