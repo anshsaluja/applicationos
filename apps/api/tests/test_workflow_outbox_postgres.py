@@ -242,3 +242,44 @@ def test_synthetic_worker_crash_after_claim_never_replays(factory, monkeypatch):
     with factory.begin() as session:
         assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
         assert WorkflowRepository(session).get(action_id).status == WorkflowStatus.RUNNING
+
+
+
+def test_repeated_synthetic_confirmation_requires_matching_durable_receipt(factory):
+    """A dispatched flag alone cannot prove that a synthetic effect completed."""
+    from app.persistence import SyntheticReceiptRow
+
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(action_id)
+        assert outbox.claim_next_pending(action_id=action_id) is not None
+        outbox.mark_dispatched(action_id)  # Non-synthetic bookkeeping, no receipt.
+        with pytest.raises(WorkflowTransitionError, match="Verified synthetic receipt"):
+            outbox.mark_dispatched(action_id, synthetic_receipt=True)
+
+    with factory.begin() as session:
+        assert session.get(SyntheticReceiptRow, action_id) is None
+        assert session.get(WorkflowOutboxRow, action_id).status == "dispatched"
+
+
+def test_repeated_synthetic_confirmation_accepts_verified_receipt(factory):
+    action_id = uuid4()
+    with factory.begin() as session:
+        workflow = WorkflowRepository(session)
+        workflow.create(WorkflowState(action_id=action_id, idempotency_key=str(uuid4())))
+        workflow.advance(action_id, WorkflowStatus.AWAITING_APPROVAL)
+        ApprovalRepository(session).decide(action_id, "approved", reviewer_id="test")
+        workflow.advance(action_id, WorkflowStatus.READY)
+        workflow.claim_ready(action_id)
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(action_id)
+        assert outbox.claim_next_pending(action_id=action_id) is not None
+        outbox.mark_dispatched(action_id, synthetic_receipt=True)
+        assert outbox.mark_dispatched(action_id, synthetic_receipt=True).status == "dispatched"
