@@ -66,7 +66,7 @@ def test_recovery_rejects_unknown_persisted_outbox_status(status):
 
 
 def test_recovery_accepts_already_quarantined_outbox_without_replay():
-    repository, workflow, outbox, session, action_id = make_repository("quarantined")
+    repository, _workflow, outbox, session, action_id = make_repository("quarantined")
     result = repository.recover_interrupted(action_id)
     assert result.status.value == "failed"
     assert outbox.status == "quarantined"
