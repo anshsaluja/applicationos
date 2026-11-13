@@ -49,7 +49,7 @@ def extract_requirements(document_id: UUID, filename: str, text: str) -> list[Re
         for clause in (part for section in CLAUSE_SEPARATOR.split(sentence) for contrast in CONTRAST.split(section) for part in INDEPENDENT_OBLIGATION.split(contrast)):
             excerpt = clause.strip()
             normalized = " ".join(excerpt.casefold().split()).rstrip(".!?")
-            if not excerpt or not CLAUSE.search(excerpt) or WAIVER.search(excerpt) or normalized in seen:
+            if not excerpt or not (CLAUSE.search(excerpt) or IMPERATIVE.search(excerpt)) or WAIVER.search(excerpt) or normalized in seen:
                 continue
             seen.add(normalized)
             # Provenance is the exact extracted clause, not satisfaction evidence.
