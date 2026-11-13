@@ -195,6 +195,12 @@ def requires_dispatch_reconciliation(
     A succeeded workflow without a matching receipt is never trusted. A
     running workflow with no outbox cannot safely be resumed automatically.
     """
+    # Unknown persisted states must never be treated as safe after a crash.
+    # A schema drift or corrupt row needs explicit operator reconciliation.
+    if workflow_status not in {"pending", "awaiting_approval", "ready", "running", "succeeded", "failed"}:
+        return True
+    if outbox_status not in {None, "pending", "claimed", "quarantined", "dispatched"}:
+        return True
     # A mismatched or forged receipt is not equivalent to an absent receipt.
     # Even an otherwise pending intent must be quarantined for investigation.
     if receipt_present and not receipt_valid:
