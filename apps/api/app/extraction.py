@@ -24,6 +24,13 @@ CONTRAST = re.compile(r"\s*(?:[,;]\s*|\s+)\b(?:but|however)\b[,]?[\s]*", re.IGNO
 # Semicolon-separated clauses can contain independent waivers and obligations.
 # Keep each clause separate so an optional item cannot suppress a required one.
 CLAUSE_SEPARATOR = re.compile(r"\s*;\s*")
+# Split independently stated obligations joined by "and" without splitting
+# ordinary object lists such as "upload a passport and a photo".
+INDEPENDENT_OBLIGATION = re.compile(
+    r"\s+and\s+(?=(?:you|applicants?|users?|the\s+applicant|the\s+user)\s+"
+    r"(?:must|shall|need(?:s)?\s+to)\b)",
+    re.IGNORECASE,
+)
 
 WAIVER = re.compile(
     r"\b(?:not\s+required(?:\s+to)?|not\s+necessary(?:\s+to)?|"
@@ -39,7 +46,7 @@ def extract_requirements(document_id: UUID, filename: str, text: str) -> list[Re
     seen: set[str] = set()
     for match in SENTENCE.finditer(text):
         sentence = match.group().strip()
-        for clause in (part for section in CLAUSE_SEPARATOR.split(sentence) for part in CONTRAST.split(section)):
+        for clause in (part for section in CLAUSE_SEPARATOR.split(sentence) for contrast in CONTRAST.split(section) for part in INDEPENDENT_OBLIGATION.split(contrast)):
             excerpt = clause.strip()
             normalized = " ".join(excerpt.casefold().split()).rstrip(".!?")
             if not excerpt or not CLAUSE.search(excerpt) or WAIVER.search(excerpt) or normalized in seen:
