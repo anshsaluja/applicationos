@@ -21,7 +21,11 @@ CONTRAST = re.compile(r"\s*(?:[,;]\s*|\s+)\b(?:but|however)\b[,]?[\s]*", re.IGNO
 
 # Explicit waivers are not requirements. Keep this conservative: ambiguous
 # clauses still become pending review candidates rather than being inferred.
-# Semicolon-separated clauses can contain independent waivers and obligations.\n# Keep each clause separate so an optional item cannot suppress a required one.\nCLAUSE_SEPARATOR = re.compile(r"\s*;\s*")\n\nWAIVER = re.compile(
+# Semicolon-separated clauses can contain independent waivers and obligations.
+# Keep each clause separate so an optional item cannot suppress a required one.
+CLAUSE_SEPARATOR = re.compile(r"\s*;\s*")
+
+WAIVER = re.compile(
     r"\b(?:not\s+required(?:\s+to)?|not\s+necessary(?:\s+to)?|"
     r"(?:do|does)\s+not\s+need\s+to|(?:don[’\x27]t|doesn[’\x27]t)\s+need\s+to|"
     r"no\s+need\s+to|need\s+not)\b",
