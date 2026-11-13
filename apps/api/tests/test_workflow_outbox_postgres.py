@@ -261,7 +261,7 @@ def test_repeated_synthetic_confirmation_requires_matching_durable_receipt(facto
         outbox.enqueue_claimed(action_id)
         assert outbox.claim_next_pending(action_id=action_id) is not None
         outbox.mark_dispatched(action_id)  # Non-synthetic bookkeeping, no receipt.
-        with pytest.raises(WorkflowTransitionError, match="Verified synthetic receipt"):
+        with pytest.raises(WorkflowTransitionError, match="Verified workflow and synthetic receipt"):
             outbox.mark_dispatched(action_id, synthetic_receipt=True)
 
     with factory.begin() as session:
