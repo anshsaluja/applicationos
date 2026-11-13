@@ -16,8 +16,7 @@ from app.documents import MAX_EXTRACTED_CHARACTERS, ingest_upload
 @pytest.mark.asyncio
 async def test_pdf_parser_exception_does_not_leak_internal_details() -> None:
     upload = UploadFile(filename="broken.pdf", file=BytesIO(b"%PDF-malformed"), headers={"content-type": "application/pdf"})
-    with patch("fitz.open", side_effect=RuntimeError("internal filesystem /secret/path")):
-        with pytest.raises(HTTPException) as caught:
+    with patch("fitz.open", side_effect=RuntimeError("internal filesystem /secret/path")), pytest.raises(HTTPException) as caught:
             await ingest_upload(upload)
     assert caught.value.status_code == 422
     assert caught.value.detail == "Unable to parse PDF"
