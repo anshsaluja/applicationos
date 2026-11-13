@@ -7,10 +7,7 @@ import pytest
 
 from app.domain.workflows import WorkflowTransitionError
 from app.persistence import (
-    SyntheticReceiptRow,
     WorkflowOutboxRepository,
-    WorkflowOutboxRow,
-    WorkflowRow,
 )
 
 
