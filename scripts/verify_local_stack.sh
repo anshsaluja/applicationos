@@ -123,6 +123,30 @@ print(action_id)
 PY
 )"
 printf '%s\n' "$smoke_result"
+# Preserve the exact smoke-created document and workspace for post-restart
+# HTTP provenance checks, rather than relying on global database row counts.
+document_id="$(SMOKE_RESULT="$smoke_result" python3 - <<'PY'
+import json
+import os
+import uuid
+
+result = json.loads(os.environ["SMOKE_RESULT"])
+value = result["document_id"]
+uuid.UUID(value)
+print(value)
+PY
+)"
+workspace_id="$(SMOKE_RESULT="$smoke_result" python3 - <<'PY'
+import json
+import os
+import uuid
+
+result = json.loads(os.environ["SMOKE_RESULT"])
+value = result["workspace_id"]
+uuid.UUID(value)
+print(value)
+PY
+)"
 docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT extname FROM pg_extension WHERE extname = 'vector'" | grep -qx vector
 docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
@@ -175,6 +199,34 @@ with urllib.request.urlopen(
 assert workflow["action_id"] == action_id, "Wrong checkpoint returned after restart"
 assert workflow["status"] == "awaiting_approval", "Approval boundary changed after restart"
 print("Awaiting-approval checkpoint survived API restart: PASS")
+PY
+# Verify the exact document, its source links, and its persisted workspace
+# remain accessible through FastAPI after the process has restarted.
+DOCUMENT_ID="$document_id" WORKSPACE_ID="$workspace_id" python3 - <<'PY'
+import json
+import os
+import urllib.request
+
+base = "http://127.0.0.1:8000"
+document_id = os.environ["DOCUMENT_ID"]
+workspace_id = os.environ["WORKSPACE_ID"]
+
+def get(path):
+    with urllib.request.urlopen(base + path, timeout=10) as response:
+        assert response.status == 200
+        return json.load(response)
+
+document = get(f"/v1/documents/{document_id}")
+assert document["id"] == document_id, "Smoke document was not restored"
+assert len(document["sha256"]) == 64, "Document digest missing after restart"
+sources = get(f"/v1/documents/{document_id}/requirement-sources")
+assert sources and all(item["source_document_id"] == document_id for item in sources), (
+    "Document requirement provenance was lost after restart"
+)
+requirements = get(f"/v1/workspaces/{workspace_id}/requirements")
+assert requirements["workspace_id"] == workspace_id
+assert requirements["requirements"], "Persisted requirements missing after restart"
+print("Document provenance and workspace requirements survived API restart: PASS")
 PY
 documents_after="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) FROM documents")"
