@@ -228,14 +228,13 @@ assert requirements["workspace_id"] == workspace_id
 assert requirements["requirements"], "Persisted requirements missing after restart"
 # A nonempty source list and a nonempty workspace are insufficient: prove
 # that the exact source candidates remain linked to persisted requirements.
-source_ids = {str(item.get("id")) for item in sources}
-requirement_ids = {str(item.get("id")) for item in requirements["requirements"]}
-assert source_ids and requirement_ids
-# Source rows may expose requirement_id only after persistence; reject
-# mismatched links, while allowing source candidates without a stored match.
-linked_ids = {str(item["requirement_id"]) for item in sources if item.get("requirement_id")}
-assert not linked_ids or linked_ids <= requirement_ids, (
-    "Provenance links point outside the smoke workspace"
+source_requirement_ids = {str(item["requirement_id"]) for item in sources}
+stored_requirement_ids = {str(item["id"]) for item in requirements["requirements"]}
+assert source_requirement_ids == stored_requirement_ids, (
+    "Document source candidates no longer match persisted workspace requirements"
+)
+assert all(not item["satisfaction_evidence"] for item in sources), (
+    "Instruction provenance was incorrectly presented as satisfaction evidence"
 )
 print("Document provenance and workspace requirements survived API restart: PASS")
 PY
