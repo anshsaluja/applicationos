@@ -20,6 +20,8 @@ from app.main import parse_cors_origins
         "http://example.com?",
         "http://example.com#",
         "http://exa\u00a0mple.com",
+        "https://bücher.example",
+        "https://example.com\u200b",
     ],
 )
 def test_reject_ambiguous_or_unsafe_origins(value: str) -> None:
@@ -31,6 +33,12 @@ def test_accept_explicit_origins_and_deduplicate() -> None:
     assert parse_cors_origins(
         "http://localhost:3000, https://example.com:443, http://localhost:3000"
     ) == ["http://localhost:3000", "https://example.com:443"]
+
+
+def test_accept_punycode_idn_origin() -> None:
+    assert parse_cors_origins("https://xn--bcher-kva.example") == [
+        "https://xn--bcher-kva.example"
+    ]
 
 
 def test_accept_ipv6_with_valid_port() -> None:
