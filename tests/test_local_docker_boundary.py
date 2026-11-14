@@ -103,6 +103,23 @@ class DockerEndpointSafetyTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertEqual(calls, ["compose version"])
 
+    def test_missing_or_malformed_context_endpoint_fails_closed(self):
+        # A context without a usable local socket must never reach docker info.
+        for endpoint in ("", "not-a-docker-endpoint", "unixsocket:///var/run/docker.sock"):
+            with self.subTest(endpoint=endpoint):
+                result, calls = self.run_with_endpoint(context_endpoint=endpoint)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("Refusing non-local Docker context endpoint", result.stderr)
+                self.assertNotIn("info", calls)
+
+    def test_remote_host_with_whitespace_cannot_bypass_local_check(self):
+        result, calls = self.run_with_endpoint(
+            docker_host=" unix:///var/run/docker.sock"
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("Refusing non-local DOCKER_HOST", result.stderr)
+        self.assertEqual(calls, ["compose version"])
+
     def test_local_context_reaches_daemon_check(self):
         result, calls = self.run_with_endpoint()
         self.assertEqual(result.returncode, 2, result.stderr)
