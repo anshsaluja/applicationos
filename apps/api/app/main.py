@@ -23,8 +23,8 @@ def parse_cors_origins(value: str) -> list[str]:
         origin = item.strip().rstrip("/")
         if not origin:
             continue
-        # Backslashes and controls have inconsistent URL interpretations across clients.
-        if any(ch == "\\" or ch.isspace() or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in origin):
+        # Require ASCII origin serialization (IDNs must use punycode); reject ambiguous URL characters.
+        if any(ch == "\\" or ch.isspace() or ord(ch) < 0x20 or ord(ch) >= 0x7F for ch in origin):
             raise ValueError("CORS_ALLOWED_ORIGINS contains unsafe URL characters")
         parsed = urlsplit(origin)
         if (
