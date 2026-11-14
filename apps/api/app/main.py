@@ -20,7 +20,7 @@ def parse_cors_origins(value: str) -> list[str]:
     """Allow only explicit HTTP(S) browser origins, never wildcards or URL paths."""
     origins: list[str] = []
     for item in value.split(","):
-        origin = item.strip().rstrip("/")
+        origin = item.strip()
         if not origin:
             continue
         # Require ASCII origin serialization (IDNs must use punycode); reject ambiguous URL characters.
