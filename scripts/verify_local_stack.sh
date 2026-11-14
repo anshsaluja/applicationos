@@ -291,7 +291,24 @@ else:
 with urllib.request.urlopen(base + f"/v1/workflows/{action_id}", timeout=10) as response:
     final = json.load(response)
 assert final == original, "Rejected operations mutated awaiting-approval checkpoint"
-print("Restart idempotency and unauthenticated approval boundary: PASS")
+
+# A read-only reconciliation check must not invent a dispatched effect or
+# synthetic receipt for a workflow that has never been approved.
+with urllib.request.urlopen(base + f"/v1/workflows/{action_id}/dispatch-status", timeout=10) as response:
+    dispatch = json.load(response)
+assert dispatch["action_id"] == action_id
+assert dispatch["workflow_status"] == "awaiting_approval"
+assert dispatch["outbox_status"] is None, "Unapproved workflow unexpectedly has an outbox intent"
+assert dispatch["synthetic_receipt_present"] is False
+assert dispatch["synthetic_receipt_valid"] is False
+assert dispatch["reconciliation_required"] is False
+
+# A duplicate review request after restart must preserve the same checkpoint,
+# including its retry budget, rather than resetting or advancing the workflow.
+with post(f"/v1/workflows/{action_id}/request-review", {}) as response:
+    repeated_review = json.load(response)
+assert repeated_review == original, "Duplicate review changed the durable checkpoint"
+print("Restart idempotency, approval and dispatch boundaries: PASS")
 PY
 documents_after="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) FROM documents")"
