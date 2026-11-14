@@ -25,9 +25,10 @@ class DockerEndpointSafetyTests(unittest.TestCase):
                 "printf '%s\\n' \"$*\" >> \"$DOCKER_CALL_LOG\"\n"
                 "case \"$*\" in\n"
                 "  'compose version') exit 0 ;;\n"
-                "  'context show') printf '%s\\n' "$FAKE_DOCKER_CONTEXT" ;;\n"
-                "  'context inspect * --format {{.Endpoints.docker.Host}}') "
+                "  'context show') printf '%s\\n' \"$FAKE_DOCKER_CONTEXT\" ;;\n"
+                "  context\\ inspect\\ *\\ --format\\ *) "
                 "printf '%s\\n' \"$FAKE_CONTEXT_ENDPOINT\" ;;\n"
+                "  'info') exit 1 ;;\n"
                 "  *) echo 'unexpected Docker operation' >&2; exit 99 ;;\n"
                 "esac\n"
             )
