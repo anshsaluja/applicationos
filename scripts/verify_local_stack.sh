@@ -49,5 +49,25 @@ for attempt in range(40):
 else:
     raise SystemExit("Next.js did not serve the ApplicationOS page on localhost:3000")
 PY
-python3 scripts/smoke_local_journey.py
+# The API intentionally does not create tables at startup. Prepare the local
+# database explicitly before testing, just as the CI Compose job does.
+docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 \
+  -c "CREATE EXTENSION IF NOT EXISTS vector"
+docker compose exec -T api python - <<'PY'
+from app.persistence import Base, build_engine
+
+engine = build_engine()
+try:
+    Base.metadata.create_all(bind=engine)
+finally:
+    engine.dispose()
+PY
+
+# Run inside the API container so the installed dependencies and local
+# PostgreSQL hostname match the real service, without host Python setup.
+# Approval and synthetic execution remain opt-in; never supply a token here.
+docker compose exec -T \
+  -e APPLICATIONOS_SMOKE_REVIEW_TOKEN= \
+  -e APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION= \
+  api python /workspace/scripts/smoke_local_journey.py
 echo "Local Next.js HTTP readiness and document-to-review API smoke passed (browser interactions and approval/execution NOT tested)."
