@@ -238,6 +238,61 @@ assert all(not item["satisfaction_evidence"] for item in sources), (
 )
 print("Document provenance and workspace requirements survived API restart: PASS")
 PY
+# A restart must not weaken the review gate or create a second checkpoint
+# when the original idempotency key is replayed.
+CHECKPOINT_ID="$checkpoint_id" python3 - <<'PY'
+import json
+import os
+import urllib.error
+import urllib.request
+from uuid import uuid4
+
+base = "http://127.0.0.1:8000"
+action_id = os.environ["CHECKPOINT_ID"]
+
+def post(path, body):
+    request = urllib.request.Request(
+        base + path,
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    return urllib.request.urlopen(request, timeout=10)
+
+with urllib.request.urlopen(base + f"/v1/workflows/{action_id}", timeout=10) as response:
+    original = json.load(response)
+key = original["idempotency_key"]
+assert key, "Persisted workflow has no idempotency key"
+
+with post("/v1/workflows", {"action_id": action_id, "idempotency_key": key}) as response:
+    replay = json.load(response)
+assert replay == original, "Restarted API changed checkpoint on idempotent replay"
+
+try:
+    with post("/v1/workflows", {
+        "action_id": str(uuid4()), "idempotency_key": key,
+    }):
+        pass
+except urllib.error.HTTPError as error:
+    assert error.code == 409, f"Conflicting replay returned {error.code}, expected 409"
+else:
+    raise AssertionError("Restarted API accepted a conflicting idempotency key")
+
+try:
+    with post(f"/v1/workflows/{action_id}/decision", {
+        "decision": "approved", "reason": "Unauthorized restart regression probe",
+    }):
+        pass
+except urllib.error.HTTPError as error:
+    assert error.code == 403, f"Unauthenticated approval returned {error.code}, expected 403"
+else:
+    raise AssertionError("Restarted API accepted an unauthenticated approval")
+
+with urllib.request.urlopen(base + f"/v1/workflows/{action_id}", timeout=10) as response:
+    final = json.load(response)
+assert final == original, "Rejected operations mutated awaiting-approval checkpoint"
+print("Restart idempotency and unauthenticated approval boundary: PASS")
+PY
 documents_after="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) FROM documents")"
 requirements_after="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
