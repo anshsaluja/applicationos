@@ -24,7 +24,7 @@ def parse_cors_origins(value: str) -> list[str]:
         if not origin:
             continue
         # Backslashes and controls have inconsistent URL interpretations across clients.
-        if any(ch == "\\" or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in origin):
+        if any(ch == "\\" or ch.isspace() or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in origin):
             raise ValueError("CORS_ALLOWED_ORIGINS contains unsafe URL characters")
         parsed = urlsplit(origin)
         if (
@@ -36,6 +36,7 @@ def parse_cors_origins(value: str) -> list[str]:
             or parsed.query
             or parsed.fragment
             or "*" in origin
+            or origin != f"{parsed.scheme}://{parsed.netloc}"
             or parsed.netloc.endswith(":")
         ):
             raise ValueError("CORS_ALLOWED_ORIGINS must contain explicit HTTP(S) origins")
