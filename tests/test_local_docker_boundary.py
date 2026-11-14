@@ -83,6 +83,26 @@ class DockerEndpointSafetyTests(unittest.TestCase):
             "context inspect production --format {{.Endpoints.docker.Host}}",
         ])
 
+    def test_local_host_does_not_mask_remote_selected_context(self):
+        # Both selectors must be safe even when the CLI prioritizes one.
+        result, calls = self.run_with_endpoint(
+            docker_host="unix:///var/run/docker.sock",
+            docker_context="production",
+            context_endpoint="ssh://production.example",
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("Refusing non-local Docker context endpoint", result.stderr)
+        self.assertNotIn("info", calls)
+
+    def test_remote_host_is_rejected_even_with_local_context(self):
+        result, calls = self.run_with_endpoint(
+            docker_host="ssh://production.example",
+            docker_context="default",
+            context_endpoint="unix:///var/run/docker.sock",
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(calls, ["compose version"])
+
     def test_local_context_reaches_daemon_check(self):
         result, calls = self.run_with_endpoint()
         self.assertEqual(result.returncode, 2, result.stderr)
