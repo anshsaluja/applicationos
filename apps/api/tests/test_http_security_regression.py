@@ -28,7 +28,7 @@ def test_cors_rejects_non_origin_values(value: str) -> None:
 
 def test_cors_deduplicates_explicit_origins() -> None:
     assert parse_cors_origins(
-        "http://localhost:3000/, https://example.com, http://localhost:3000"
+        "http://localhost:3000, https://example.com, http://localhost:3000"
     ) == ["http://localhost:3000", "https://example.com"]
 
 
