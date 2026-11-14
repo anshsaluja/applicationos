@@ -103,4 +103,58 @@ docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERR
   "SELECT extname FROM pg_extension WHERE extname = 'vector'" | grep -qx vector
 docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) > 0 FROM documents" | grep -qx t
-echo "Local Next.js HTTP readiness and document-to-review API smoke passed (browser interactions and approval/execution NOT tested)."
+# A smoke pass is not sufficient if records disappear after the API restarts.
+# Capture a specific awaiting-approval checkpoint, not just aggregate row counts.
+checkpoint_id="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+  "SELECT action_id FROM workflow_checkpoints WHERE status = 'awaiting_approval' ORDER BY action_id DESC LIMIT 1")"
+if [[ -z "$checkpoint_id" ]]; then
+  echo "No awaiting-approval workflow persisted by smoke test." >&2
+  exit 1
+fi
+documents_before="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+  "SELECT count(*) FROM documents")"
+requirements_before="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+  "SELECT count(*) FROM requirements")"
+test "$documents_before" -gt 0
+test "$requirements_before" -gt 0
+docker compose restart api
+python3 - <<'PY'
+import json
+import time
+import urllib.error
+import urllib.request
+
+for _ in range(60):
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8000/ready", timeout=3) as response:
+            if response.status == 200 and json.load(response) == {"status": "ready"}:
+                print("API restart and PostgreSQL readiness: PASS")
+                break
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        pass
+    time.sleep(2)
+else:
+    raise SystemExit("API failed readiness after restart")
+PY
+# Compare the exact checkpoint via HTTP, not merely its database row.
+CHECKPOINT_ID="$checkpoint_id" python3 - <<'PY'
+import json
+import os
+import urllib.request
+
+action_id = os.environ["CHECKPOINT_ID"]
+with urllib.request.urlopen(
+    f"http://127.0.0.1:8000/v1/workflows/{action_id}", timeout=10
+) as response:
+    workflow = json.load(response)
+assert workflow["action_id"] == action_id, "Wrong checkpoint returned after restart"
+assert workflow["status"] == "awaiting_approval", "Approval boundary changed after restart"
+print("Awaiting-approval checkpoint survived API restart: PASS")
+PY
+documents_after="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+  "SELECT count(*) FROM documents")"
+requirements_after="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+  "SELECT count(*) FROM requirements")"
+test "$documents_after" -eq "$documents_before"
+test "$requirements_after" -eq "$requirements_before"
+echo "Local HTTP, ingestion, provenance, idempotency, approval-boundary persistence and API restart smoke passed (browser and signed approval/execution NOT tested)."
