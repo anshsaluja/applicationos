@@ -9,11 +9,10 @@ if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>
   echo "Docker with Compose v2 is required." >&2
   exit 2
 fi
-if ! docker info >/dev/null 2>&1; then
-  echo "Docker daemon is not running." >&2
-  exit 2
-fi
-
+# Validate the endpoint BEFORE contacting the Docker daemon. Even a read-only
+# docker info call can disclose host metadata to a configured remote daemon.
+# Explicit DOCKER_HOST overrides the active context in the normal CLI path.
+# Reject remote endpoints regardless of which selector is currently active.
 # Refuse a remote Docker context: local-only is a deliberate safety boundary.
 docker_host="${DOCKER_HOST:-}"
 if [[ -n "$docker_host" && "$docker_host" != unix://* && "$docker_host" != npipe://* ]]; then
@@ -27,6 +26,10 @@ fi
 context_host="$(docker context inspect "$(docker context show)" --format '{{.Endpoints.docker.Host}}')"
 if [[ "$context_host" != unix://* && "$context_host" != npipe://* ]]; then
   echo "Refusing non-local Docker context endpoint." >&2
+  exit 2
+fi
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker daemon is not running." >&2
   exit 2
 fi
 
