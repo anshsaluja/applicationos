@@ -21,6 +21,15 @@ if [[ -n "$docker_host" && "$docker_host" != unix://* && "$docker_host" != npipe
   exit 2
 fi
 
+# DOCKER_HOST is not the only way to select a remote daemon: an active
+# Docker context can point to SSH or TCP even when DOCKER_HOST is unset.
+# Inspect the effective endpoint and refuse remote execution before any writes.
+context_host="$(docker context inspect "$(docker context show)" --format '{{.Endpoints.docker.Host}}')"
+if [[ "$context_host" != unix://* && "$context_host" != npipe://* ]]; then
+  echo "Refusing non-local Docker context endpoint." >&2
+  exit 2
+fi
+
 # Never disrupt a developer's already-running Compose stack.
 existing_services="$(docker compose ps --status running --services)"
 if [[ -n "$existing_services" ]]; then
