@@ -44,6 +44,8 @@ jobs:
         run: pip install -e '.[dev]'
       - name: Validate local verification shell syntax
         run: bash -n ../../scripts/verify_local_stack.sh
+      - name: Test local-only Docker endpoint safety without a daemon
+        run: python -m unittest discover -s ../../tests -p 'test_local_docker_boundary.py' -v
       - name: Compile API source and tests
         # Catch malformed Python (including escaped newlines) before any DB setup.
         # compileall does not import modules or require running services.
