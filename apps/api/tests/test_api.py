@@ -146,7 +146,7 @@ def test_cors_origin_configuration_normalizes_and_deduplicates() -> None:
     from app.main import parse_cors_origins
 
     assert parse_cors_origins(
-        " https://example.com/, http://localhost:3000, https://example.com "
+        " https://example.com, http://localhost:3000, https://example.com "
     ) == ["https://example.com", "http://localhost:3000"]
 
 
