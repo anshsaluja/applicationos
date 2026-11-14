@@ -16,6 +16,10 @@ from app.main import parse_cors_origins
         "https://example.com/path",
         "https://user@example.com",
         "https://*.example.com",
+        "http://exa mple.com",
+        "http://example.com?",
+        "http://example.com#",
+        "http://example.com\u00a0",
     ],
 )
 def test_reject_ambiguous_or_unsafe_origins(value: str) -> None:
