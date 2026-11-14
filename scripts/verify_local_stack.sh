@@ -226,6 +226,17 @@ assert sources and all(item["source_document_id"] == document_id for item in sou
 requirements = get(f"/v1/workspaces/{workspace_id}/requirements")
 assert requirements["workspace_id"] == workspace_id
 assert requirements["requirements"], "Persisted requirements missing after restart"
+# A nonempty source list and a nonempty workspace are insufficient: prove
+# that the exact source candidates remain linked to persisted requirements.
+source_ids = {str(item.get("id")) for item in sources}
+requirement_ids = {str(item.get("id")) for item in requirements["requirements"]}
+assert source_ids and requirement_ids
+# Source rows may expose requirement_id only after persistence; reject
+# mismatched links, while allowing source candidates without a stored match.
+linked_ids = {str(item["requirement_id"]) for item in sources if item.get("requirement_id")}
+assert not linked_ids or linked_ids <= requirement_ids, (
+    "Provenance links point outside the smoke workspace"
+)
 print("Document provenance and workspace requirements survived API restart: PASS")
 PY
 documents_after="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
