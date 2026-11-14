@@ -95,18 +95,34 @@ PY
 # Run inside the API container so the installed dependencies and local
 # PostgreSQL hostname match the real service, without host Python setup.
 # Approval and synthetic execution remain opt-in; never supply a token here.
-docker compose exec -T \
+smoke_result="$(docker compose exec -T \
   -e APPLICATIONOS_SMOKE_REVIEW_TOKEN= \
   -e APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION= \
-  api python /workspace/scripts/smoke_local_journey.py
+  api python /workspace/scripts/smoke_local_journey.py)"
+# Capture the workflow created by THIS smoke invocation, rather than selecting
+# an unrelated older checkpoint from a preserved development database.
+checkpoint_id="$(SMOKE_RESULT="$smoke_result" python3 - <<'PY'
+import json
+import os
+import uuid
+
+result = json.loads(os.environ["SMOKE_RESULT"])
+assert result["result"] == "PASS", "Smoke journey did not pass"
+action_id = result["workflow_id"]
+uuid.UUID(action_id)
+print(action_id)
+PY
+)"
+printf '%s\n' "$smoke_result"
 docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT extname FROM pg_extension WHERE extname = 'vector'" | grep -qx vector
 docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) > 0 FROM documents" | grep -qx t
 # A smoke pass is not sufficient if records disappear after the API restarts.
 # Capture a specific awaiting-approval checkpoint, not just aggregate row counts.
-checkpoint_id="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
-  "SELECT action_id FROM workflow_checkpoints WHERE status = 'awaiting_approval' ORDER BY action_id DESC LIMIT 1")"
+persisted_checkpoint="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+  "SELECT status FROM workflow_checkpoints WHERE action_id = '$checkpoint_id'")"
+test "$persisted_checkpoint" = awaiting_approval
 if [[ -z "$checkpoint_id" ]]; then
   echo "No awaiting-approval workflow persisted by smoke test." >&2
   exit 1
