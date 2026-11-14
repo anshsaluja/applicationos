@@ -19,7 +19,7 @@ from app.main import parse_cors_origins
         "http://exa mple.com",
         "http://example.com?",
         "http://example.com#",
-        "http://example.com\u00a0",
+        "http://exa\u00a0mple.com",
     ],
 )
 def test_reject_ambiguous_or_unsafe_origins(value: str) -> None:
