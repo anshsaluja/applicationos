@@ -56,6 +56,8 @@ jobs:
         run: python -m unittest discover -s ../../tests -p 'test_smoke_transport_initialization.py' -v
       - name: Enforce explicit approval opt-in for synthetic smoke
         run: python -m unittest discover -s ../../tests -p 'test_smoke_approval_opt_in.py' -v
+      - name: Mutation-test synthetic approval guard control flow
+        run: python -m unittest discover -s ../../tests -p 'test_smoke_approval_guard_mutations.py' -v
       - name: Compile API source and tests
         # Catch malformed Python (including escaped newlines) before any DB setup.
         # compileall does not import modules or require running services.
