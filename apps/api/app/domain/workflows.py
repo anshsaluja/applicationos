@@ -53,6 +53,11 @@ def transition(
     # limit cannot legitimately be dispatched again.
     if state.attempt > state.max_attempts:
         raise WorkflowTransitionError("Invalid execution attempt")
+    # A persisted RUNNING checkpoint must represent a claimed execution.
+    # Reject zero-attempt corruption on every transition, not only replay or
+    # dispatch; otherwise a fabricated checkpoint could become SUCCEEDED.
+    if state.status == WorkflowStatus.RUNNING and state.attempt == 0:
+        raise WorkflowTransitionError("Invalid execution attempt")
     if state.status == WorkflowStatus.READY and state.attempt >= state.max_attempts:
         raise WorkflowTransitionError("Retry budget exhausted")
 
