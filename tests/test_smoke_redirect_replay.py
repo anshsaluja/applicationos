@@ -55,8 +55,8 @@ class RedirectReplayTests(unittest.TestCase):
                 handler for handler in smoke.opener.handlers
                 if isinstance(handler, smoke.urllib.request.ProxyHandler)
             ]
-            self.assertEqual(len(handlers), 1)
-            self.assertEqual(handlers[0].proxies, {})
+            # urllib omits an empty ProxyHandler from its handler chain.
+            self.assertEqual(handlers, [])
 
     def test_redirects_do_not_replay_get_or_post(self):
         spec = importlib.util.spec_from_file_location("smoke_local_journey", SCRIPT)
