@@ -93,3 +93,33 @@ def test_exhausted_review_checkpoint_cannot_become_ready():
     )
     with pytest.raises(WorkflowTransitionError, match="Retry budget exhausted"):
         transition(state, WorkflowStatus.READY, approval=approved(action_id))
+
+
+@pytest.mark.parametrize("target", list(WorkflowStatus))
+def test_unclaimed_running_checkpoint_rejects_every_transition(target):
+    """A zero-attempt RUNNING row is not a valid claimed execution."""
+    action_id = uuid4()
+    state = WorkflowState(
+        action_id=action_id,
+        idempotency_key="unclaimed-running",
+        status=WorkflowStatus.RUNNING,
+        attempt=0,
+        max_attempts=3,
+    )
+    with pytest.raises(WorkflowTransitionError, match="Invalid execution attempt"):
+        transition(state, target, approval=approved(action_id))
+
+
+@pytest.mark.parametrize("target", [WorkflowStatus.SUCCEEDED, WorkflowStatus.FAILED])
+def test_valid_claimed_running_checkpoint_can_finish(target):
+    action_id = uuid4()
+    state = WorkflowState(
+        action_id=action_id,
+        idempotency_key="claimed-running",
+        status=WorkflowStatus.RUNNING,
+        attempt=1,
+        max_attempts=3,
+    )
+    result = transition(state, target)
+    assert result.status == target
+    assert result.attempt == 1
