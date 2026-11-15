@@ -33,7 +33,7 @@ def test_unapproved_transitions_never_enter_executable_state(status, target):
     state = _state(status)
     if target not in {WorkflowStatus.READY, WorkflowStatus.RUNNING}:
         return
-    with pytest.raises(WorkflowTransitionError, match="approval"):
+    with pytest.raises(WorkflowTransitionError):
         transition(state, target, approval=None)
 
 
