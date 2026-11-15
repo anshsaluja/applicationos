@@ -54,7 +54,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise urllib.error.HTTPError(req.full_url, code, "Redirect refused", headers, fp)
 
 
-# Never inherit HTTP(S)_PROXY from the host: even loopback-only smoke traffic\n# must reach the local API directly, not a configured proxy.\nopener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect)
+# Never inherit HTTP(S)_PROXY from the host: even loopback-only smoke traffic
+# must reach the local API directly, not a configured proxy.
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect)
 
 
 def request(method, path, body=None, content_type="application/json", extra_headers=None):
