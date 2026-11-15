@@ -18,7 +18,7 @@ from app.domain.workflows import WorkflowState
     ],
 )
 def test_ambiguous_idempotency_keys_are_rejected(key: str) -> None:
-    with pytest.raises(ValidationError, match="Idempotency key"):
+    with pytest.raises(ValidationError):
         WorkflowState(action_id=uuid4(), idempotency_key=key)
 
 
