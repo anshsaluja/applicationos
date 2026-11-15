@@ -17,9 +17,6 @@ class SmokeApprovalOptInTests(unittest.TestCase):
             text = ast.unparse(node.test)
             if "token" in text and "APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION" in text:
                 guards.append(node)
-        self.assertEqual(len(guards), 1, "Approval path must require both token and explicit local-only opt-in")
-        guard = guards[0]
-        self.assertIn("'local-only'", ast.unparse(guard.test))
         decision_calls = [
             node for node in ast.walk(main)
             if isinstance(node, ast.Call)
@@ -35,6 +32,19 @@ class SmokeApprovalOptInTests(unittest.TestCase):
             )
         ]
         self.assertTrue(decision_calls, "Expected approval decision requests in smoke journey")
+        # An earlier fail-fast token validation is also guarded by local-only
+        # mode. Select the guard that actually encloses every decision call,
+        # rather than assuming there is only one matching conditional.
+        approval_guards = [
+            guard for guard in guards
+            if all(guard.lineno < call.lineno <= guard.end_lineno for call in decision_calls)
+        ]
+        self.assertEqual(
+            len(approval_guards), 1,
+            "All approval decisions must share one explicit local-only token guard",
+        )
+        guard = approval_guards[0]
+        self.assertIn("'local-only'", ast.unparse(guard.test))
         guarded_lines = (guard.lineno, guard.end_lineno)
         self.assertTrue(
             all(guarded_lines[0] < call.lineno <= guarded_lines[1] for call in decision_calls),
