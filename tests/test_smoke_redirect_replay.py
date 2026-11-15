@@ -38,6 +38,26 @@ class RedirectServer(http.server.BaseHTTPRequestHandler):
 
 
 class RedirectReplayTests(unittest.TestCase):
+    def test_smoke_opener_disables_environment_proxies(self):
+        # An inherited proxy must never see synthetic local workflow requests.
+        from unittest.mock import patch
+
+        with patch.dict("os.environ", {
+            "HTTP_PROXY": "http://127.0.0.1:9",
+            "HTTPS_PROXY": "http://127.0.0.1:9",
+            "NO_PROXY": "",
+            "no_proxy": "",
+        }):
+            spec = importlib.util.spec_from_file_location("smoke_proxy_boundary", SCRIPT)
+            smoke = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(smoke)
+            handlers = [
+                handler for handler in smoke.opener.handlers
+                if isinstance(handler, smoke.urllib.request.ProxyHandler)
+            ]
+            self.assertEqual(len(handlers), 1)
+            self.assertEqual(handlers[0].proxies, {})
+
     def test_redirects_do_not_replay_get_or_post(self):
         spec = importlib.util.spec_from_file_location("smoke_local_journey", SCRIPT)
         smoke = importlib.util.module_from_spec(spec)
