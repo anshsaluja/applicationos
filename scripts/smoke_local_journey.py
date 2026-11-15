@@ -217,6 +217,16 @@ def main():
                 replay_receipt = session.get(SyntheticReceiptRow, receipt.action_id)
                 assert replay_receipt is not None, "Replay removed the synthetic receipt"
                 assert replay_receipt.action_id == receipt_action_id, "Replay changed receipt identity"
+            # Rejected actions must never acquire a receipt, even if explicitly dispatched.
+            rejected_uuid = __import__("uuid").UUID(rejected_action_id)
+            assert dispatch_one_synthetic(factory, action_id=rejected_uuid) is None
+            with factory.begin() as session:
+                assert session.get(SyntheticReceiptRow, rejected_uuid) is None, (
+                    "Rejected workflow acquired a synthetic execution receipt"
+                )
+                persisted_receipt = session.get(SyntheticReceiptRow, receipt.action_id)
+                assert persisted_receipt is not None
+                assert persisted_receipt.action_id == receipt_action_id
             assert request("GET", "/v1/workflows/" + rejected_action_id)["status"] == "failed"
             boundary_result = "approved synthetic no-op completed once; rejected action never dispatched"
     else:
