@@ -197,8 +197,11 @@ def main():
             assert receipt is not None and receipt.action_id == __import__("uuid").UUID(action_id)
             assert dispatch_one_synthetic(factory, action_id=receipt.action_id) is None
             with factory.begin() as session:
-                assert session.get(SyntheticReceiptRow, receipt.action_id) is not None
-            assert request("GET", "/v1/workflows/" + action_id)["status"] == "succeeded"
+                original_receipt = session.get(SyntheticReceiptRow, receipt.action_id)
+                assert original_receipt is not None, "Synthetic completion has no durable receipt"
+            completed = request("GET", "/v1/workflows/" + action_id)
+            assert completed["status"] == "succeeded"
+            assert completed["idempotency_key"] == "smoke-" + action_id
             # An HTTP retry after completion must resolve to the original
             # terminal checkpoint rather than schedule a second action.
             completed_replay = request("POST", "/v1/workflows", json.dumps({
@@ -206,7 +209,13 @@ def main():
             }).encode())
             assert completed_replay["action_id"] == action_id
             assert completed_replay["status"] == "succeeded", "Completion was lost on replay"
+            assert completed_replay["idempotency_key"] == completed["idempotency_key"]
+            assert completed_replay == completed, "Replay mutated the terminal checkpoint"
             assert dispatch_one_synthetic(factory, action_id=receipt.action_id) is None
+            with factory.begin() as session:
+                replay_receipt = session.get(SyntheticReceiptRow, receipt.action_id)
+                assert replay_receipt is not None, "Replay removed the synthetic receipt"
+                assert replay_receipt.id == original_receipt.id if hasattr(replay_receipt, "id") else replay_receipt.action_id == original_receipt.action_id
             assert request("GET", "/v1/workflows/" + rejected_action_id)["status"] == "failed"
             boundary_result = "approved synthetic no-op completed once; rejected action never dispatched"
     else:
