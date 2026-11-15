@@ -3,11 +3,10 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
-from .domain.workflows import validate_workflow_idempotency_key
-
 from .documents import ingest_upload
 from .domain.evaluator import evaluate_requirements
 from .domain.models import Requirement
+from .domain.workflows import validate_workflow_idempotency_key
 from .extraction import extract_requirements
 from .persistence import DocumentRepository, build_session_factory, session_scope
 
