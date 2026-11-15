@@ -48,6 +48,8 @@ jobs:
         run: python -m unittest discover -s ../../tests -p 'test_local_docker_boundary.py' -v
       - name: Reject unsafe synthetic smoke API targets
         run: python -m unittest discover -s ../../tests -p 'test_smoke_target_safety.py' -v
+      - name: Refuse smoke HTTP redirects to external origins
+        run: python -m unittest discover -s ../../tests -p 'test_smoke_redirect_boundary.py' -v
       - name: Compile API source and tests
         # Catch malformed Python (including escaped newlines) before any DB setup.
         # compileall does not import modules or require running services.
