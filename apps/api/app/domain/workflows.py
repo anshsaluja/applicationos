@@ -31,9 +31,9 @@ class WorkflowTransitionError(ValueError):
 def validate_workflow_idempotency_key(value: str) -> str:
     """Shared HTTP/domain validation; never normalize or alias caller keys."""
     if value != value.strip() or any(
-        ch.isspace() or unicodedata.category(ch) in {"Cc", "Cf"} for ch in value
+        ch.isspace() or unicodedata.category(ch) in {"Cc", "Cf", "Cs", "Cn"} for ch in value
     ):
-        raise ValueError("Idempotency key must not contain whitespace or invisible control/format characters")
+        raise ValueError("Idempotency key must not contain whitespace, control, format, surrogate, or unassigned characters")
     return value
 
 
