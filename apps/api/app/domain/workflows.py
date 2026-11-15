@@ -6,8 +6,8 @@ an authenticated execution boundary must be added before external actions.
 """
 from __future__ import annotations
 
-from enum import StrEnum
 import unicodedata
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
