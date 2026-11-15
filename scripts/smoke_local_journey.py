@@ -199,6 +199,14 @@ def main():
             with factory.begin() as session:
                 assert session.get(SyntheticReceiptRow, receipt.action_id) is not None
             assert request("GET", "/v1/workflows/" + action_id)["status"] == "succeeded"
+            # An HTTP retry after completion must resolve to the original
+            # terminal checkpoint rather than schedule a second action.
+            completed_replay = request("POST", "/v1/workflows", json.dumps({
+                "action_id": action_id, "idempotency_key": "smoke-" + action_id
+            }).encode())
+            assert completed_replay["action_id"] == action_id
+            assert completed_replay["status"] == "succeeded", "Completion was lost on replay"
+            assert dispatch_one_synthetic(factory, action_id=receipt.action_id) is None
             assert request("GET", "/v1/workflows/" + rejected_action_id)["status"] == "failed"
             boundary_result = "approved synthetic no-op completed once; rejected action never dispatched"
     else:
