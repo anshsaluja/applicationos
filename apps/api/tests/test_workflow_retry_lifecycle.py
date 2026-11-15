@@ -99,3 +99,23 @@ def test_retry_execution_clears_previous_error_only_when_running():
     assert running.last_error is None
     assert running.attempt == 2
     assert state.last_error == "temporary failure"
+
+
+@pytest.mark.parametrize("attempt", [0, 3, 100])
+def test_running_checkpoint_replay_rejects_invalid_attempt_even_with_approval(attempt):
+    state = _new_workflow(max_attempts=2).model_copy(
+        update={"status": WorkflowStatus.RUNNING, "attempt": attempt}
+    )
+    with pytest.raises(WorkflowTransitionError, match="Invalid execution attempt"):
+        transition(state, WorkflowStatus.RUNNING, approval=_approved(state))
+
+
+def test_running_checkpoint_replay_preserves_valid_attempt_and_identity():
+    state = _new_workflow(max_attempts=2).model_copy(
+        update={"status": WorkflowStatus.RUNNING, "attempt": 2}
+    )
+    replay = transition(state, WorkflowStatus.RUNNING, approval=_approved(state))
+    assert replay == state
+    assert replay is not state
+    assert replay.action_id == state.action_id
+    assert replay.idempotency_key == state.idempotency_key
