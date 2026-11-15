@@ -125,12 +125,12 @@ def main():
     review = request("POST", "/v1/workflows/" + action_id + "/request-review", b"{}")
     assert review["status"] == "awaiting_approval"
     assert request("GET", "/v1/workflows/" + action_id)["status"] == "awaiting_approval"
-    # Opt-in approval path: only for disposable local/CI environments with a configured reviewer.
-    # Never log the token, and never dispatch any external or synthetic action here.
+    # Opt-in approval path: require BOTH a disposable reviewer token and explicit local-only mode.
+    # An ambient reviewer token alone must never authorize smoke-test decisions.
     token = os.getenv("APPLICATIONOS_SMOKE_REVIEW_TOKEN", "")
     if os.getenv("APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION") == "local-only" and not token:
         raise AssertionError("Synthetic execution was requested without an approval test token")
-    if token:
+    if token and os.getenv("APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION") == "local-only":
         decision_path = "/v1/workflows/" + action_id + "/decision"
         decision_body = json.dumps({"decision": "approved", "reason": "Synthetic CI review"}).encode()
         try:
