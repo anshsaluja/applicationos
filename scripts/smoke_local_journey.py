@@ -199,6 +199,7 @@ def main():
             with factory.begin() as session:
                 original_receipt = session.get(SyntheticReceiptRow, receipt.action_id)
                 assert original_receipt is not None, "Synthetic completion has no durable receipt"
+                receipt_action_id = original_receipt.action_id
             completed = request("GET", "/v1/workflows/" + action_id)
             assert completed["status"] == "succeeded"
             assert completed["idempotency_key"] == "smoke-" + action_id
@@ -215,7 +216,7 @@ def main():
             with factory.begin() as session:
                 replay_receipt = session.get(SyntheticReceiptRow, receipt.action_id)
                 assert replay_receipt is not None, "Replay removed the synthetic receipt"
-                assert replay_receipt.id == original_receipt.id if hasattr(replay_receipt, "id") else replay_receipt.action_id == original_receipt.action_id
+                assert replay_receipt.action_id == receipt_action_id, "Replay changed receipt identity"
             assert request("GET", "/v1/workflows/" + rejected_action_id)["status"] == "failed"
             boundary_result = "approved synthetic no-op completed once; rejected action never dispatched"
     else:
