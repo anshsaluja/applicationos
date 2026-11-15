@@ -8,7 +8,6 @@ from uuid import uuid4
 
 import pytest
 
-from app.domain.approvals import ApprovalDecision
 from app.domain.workflows import (
     WorkflowState,
     WorkflowStatus,
