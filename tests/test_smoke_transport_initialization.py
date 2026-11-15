@@ -21,8 +21,7 @@ class SmokeTransportTests(unittest.TestCase):
             handler for handler in module.opener.handlers
             if isinstance(handler, urllib.request.ProxyHandler)
         ]
-        self.assertEqual(len(proxy_handlers), 1)
-        self.assertEqual(proxy_handlers[0].proxies, {})
+        # urllib.request.build_opener omits an explicitly supplied ProxyHandler({})\n        # from the final handler list when it has no proxy methods to install.\n        # The separate HTTP regression exercises actual proxy bypass behavior.\n        self.assertEqual(proxy_handlers, [])
         self.assertTrue(any(isinstance(h, module.NoRedirect) for h in module.opener.handlers))
 
 
