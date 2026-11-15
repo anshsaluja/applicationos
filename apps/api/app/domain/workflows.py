@@ -7,6 +7,7 @@ an authenticated execution boundary must be added before external actions.
 from __future__ import annotations
 
 from enum import StrEnum
+import unicodedata
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -38,9 +39,12 @@ class WorkflowState(BaseModel):
     @field_validator("idempotency_key")
     @classmethod
     def reject_blank_idempotency_key(cls, value: str) -> str:
-        """Never accept whitespace-only execution deduplication identifiers."""
-        if not value.strip():
-            raise ValueError("Idempotency key must not be blank")
+        """Match HTTP key rules even for internal and recovered workflow states."""
+        if value != value.strip() or any(
+            ch.isspace() or unicodedata.category(ch) in {"Cc", "Cf"}
+            for ch in value
+        ):
+            raise ValueError("Idempotency key must not contain whitespace or invisible control/format characters")
         return value
 
 
