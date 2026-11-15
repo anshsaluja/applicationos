@@ -109,3 +109,17 @@ def test_dispatch_guard_rejects_invalid_attempt_state():
     invalid = state.model_copy(update={"status": WorkflowStatus.RUNNING, "attempt": 3})
     with pytest.raises(WorkflowTransitionError, match="attempt"):
         require_dispatch_authorization(invalid, approval=approved)
+
+
+@pytest.mark.parametrize("key", ["job:\\ud800", "job:\\udfff", "job:\\u0378"])
+def test_workflow_keys_reject_surrogates_and_unassigned_codepoints(key):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="Idempotency key"):
+        WorkflowState(action_id=uuid4(), idempotency_key=key)
+
+
+@pytest.mark.parametrize("key", ["job:abc-123", "job:résumé", "job:🔒"])
+def test_workflow_keys_preserve_valid_unicode_identifiers(key):
+    state = WorkflowState(action_id=uuid4(), idempotency_key=key)
+    assert state.idempotency_key == key
