@@ -52,3 +52,44 @@ def test_completed_workflow_cannot_restart_or_reenter_review():
     for target in (WorkflowStatus.READY, WorkflowStatus.RUNNING, WorkflowStatus.AWAITING_APPROVAL):
         with pytest.raises(WorkflowTransitionError, match="Invalid transition"):
             transition(state, target, approval=decision)
+
+
+@pytest.mark.parametrize("attempt", [3, 4])
+def test_exhausted_ready_checkpoint_cannot_be_replayed_or_dispatched(attempt):
+    action_id = uuid4()
+    state = WorkflowState(
+        action_id=action_id,
+        idempotency_key="exhausted-ready",
+        status=WorkflowStatus.READY,
+        attempt=attempt,
+        max_attempts=3,
+    )
+    for target in (WorkflowStatus.READY, WorkflowStatus.RUNNING):
+        with pytest.raises(WorkflowTransitionError, match="Retry budget exhausted|Invalid execution attempt"):
+            transition(state, target, approval=approved(action_id))
+
+
+def test_corrupt_checkpoint_cannot_be_replayed_into_success():
+    action_id = uuid4()
+    state = WorkflowState(
+        action_id=action_id,
+        idempotency_key="corrupt-running",
+        status=WorkflowStatus.RUNNING,
+        attempt=5,
+        max_attempts=3,
+    )
+    with pytest.raises(WorkflowTransitionError, match="Invalid execution attempt"):
+        transition(state, WorkflowStatus.SUCCEEDED)
+
+
+def test_exhausted_review_checkpoint_cannot_become_ready():
+    action_id = uuid4()
+    state = WorkflowState(
+        action_id=action_id,
+        idempotency_key="corrupt-review",
+        status=WorkflowStatus.AWAITING_APPROVAL,
+        attempt=3,
+        max_attempts=3,
+    )
+    with pytest.raises(WorkflowTransitionError, match="Retry budget exhausted"):
+        transition(state, WorkflowStatus.READY, approval=approved(action_id))
