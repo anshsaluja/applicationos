@@ -27,6 +27,26 @@ if (
     raise SystemExit("Refusing unsafe or non-local smoke test target")
 
 
+# Validate the execution database before creating or approving any workflow.
+# A remote DATABASE_URL must never receive synthetic smoke-test writes.
+if os.getenv("APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION") == "local-only":
+    from sqlalchemy.engine import make_url
+
+    database_url = os.getenv("DATABASE_URL", "")
+    try:
+        parsed_db = make_url(database_url)
+    except Exception as exc:
+        raise SystemExit("Synthetic execution requires a valid local PostgreSQL URL") from exc
+    if (
+        parsed_db.drivername != "postgresql+psycopg"
+        or parsed_db.host not in {"localhost", "127.0.0.1", "::1", "postgres"}
+        or any(k.lower() in {"host", "hostaddr", "service"} for k in parsed_db.query)
+    ):
+        raise SystemExit("Synthetic smoke execution requires explicitly local PostgreSQL")
+    if not os.getenv("APPLICATIONOS_SMOKE_REVIEW_TOKEN"):
+        raise SystemExit("Synthetic execution requires a disposable review token")
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     """Never follow server-controlled redirects outside the local API."""
 
@@ -159,16 +179,6 @@ def main():
         # Optional disposable-database execution path. Never run without both
         # a local reviewer credential and an explicit synthetic-only opt-in.
         if os.getenv("APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION") == "local-only":
-            from sqlalchemy.engine import make_url
-
-            database_url = os.getenv("DATABASE_URL", "")
-            parsed_db = make_url(database_url)
-            if (
-                parsed_db.drivername != "postgresql+psycopg"
-                or parsed_db.host not in {"localhost", "127.0.0.1", "::1", "postgres"}
-                or any(k.lower() in {"host", "hostaddr", "service"} for k in parsed_db.query)
-            ):
-                raise ValueError("Synthetic smoke execution requires explicitly local PostgreSQL")
             from app.persistence import (
                 SyntheticReceiptRow, WorkflowOutboxRepository, WorkflowRepository,
                 build_session_factory,
