@@ -48,6 +48,14 @@ def transition(
     A READY state is not authorization to perform a side effect: the execution
     boundary must independently recheck approval and idempotency.
     """
+    # Reject corrupted or stale persisted checkpoints before even an idempotent
+    # replay can make them appear authorized. A READY checkpoint at the retry
+    # limit cannot legitimately be dispatched again.
+    if state.attempt > state.max_attempts:
+        raise WorkflowTransitionError("Invalid execution attempt")
+    if state.status == WorkflowStatus.READY and state.attempt >= state.max_attempts:
+        raise WorkflowTransitionError("Retry budget exhausted")
+
     if target == state.status:
         # Idempotent reads of an executable state must not bypass the approval
         # boundary if the durable decision has been revoked or is unavailable.
@@ -77,11 +85,7 @@ def transition(
         except ApprovalGateError as exc:
             raise WorkflowTransitionError("Verified approval is required") from exc
 
-    if (
-        target == WorkflowStatus.READY
-        and state.status == WorkflowStatus.FAILED
-        and state.attempt >= state.max_attempts
-    ):
+    if target == WorkflowStatus.READY and state.attempt >= state.max_attempts:
         raise WorkflowTransitionError("Retry budget exhausted")
 
     if target == WorkflowStatus.RUNNING:
