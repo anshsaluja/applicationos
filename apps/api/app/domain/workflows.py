@@ -51,6 +51,8 @@ def transition(
     if target == state.status:
         # Idempotent reads of an executable state must not bypass the approval
         # boundary if the durable decision has been revoked or is unavailable.
+        if target == WorkflowStatus.RUNNING and not 1 <= state.attempt <= state.max_attempts:
+            raise WorkflowTransitionError("Invalid execution attempt")
         if target in {WorkflowStatus.READY, WorkflowStatus.RUNNING}:
             try:
                 require_approved(approval, state.action_id)
