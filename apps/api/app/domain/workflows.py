@@ -28,6 +28,15 @@ class WorkflowTransitionError(ValueError):
     pass
 
 
+def validate_workflow_idempotency_key(value: str) -> str:
+    """Shared HTTP/domain validation; never normalize or alias caller keys."""
+    if value != value.strip() or any(
+        ch.isspace() or unicodedata.category(ch) in {"Cc", "Cf"} for ch in value
+    ):
+        raise ValueError("Idempotency key must not contain whitespace or invisible control/format characters")
+    return value
+
+
 class WorkflowState(BaseModel):
     action_id: UUID
     status: WorkflowStatus = WorkflowStatus.PENDING
@@ -40,12 +49,7 @@ class WorkflowState(BaseModel):
     @classmethod
     def reject_blank_idempotency_key(cls, value: str) -> str:
         """Match HTTP key rules even for internal and recovered workflow states."""
-        if value != value.strip() or any(
-            ch.isspace() or unicodedata.category(ch) in {"Cc", "Cf"}
-            for ch in value
-        ):
-            raise ValueError("Idempotency key must not contain whitespace or invisible control/format characters")
-        return value
+        return validate_workflow_idempotency_key(value)
 
 
 def transition(
