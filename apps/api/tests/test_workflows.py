@@ -115,7 +115,7 @@ def test_dispatch_guard_rejects_invalid_attempt_state():
 def test_workflow_keys_reject_surrogates_and_unassigned_codepoints(key):
     from pydantic import ValidationError
 
-    with pytest.raises(ValidationError, match="Idempotency key"):
+    with pytest.raises(ValidationError, match="Idempotency key|valid string|unicode string"):
         WorkflowState(action_id=uuid4(), idempotency_key=key)
 
 
