@@ -62,9 +62,7 @@ jobs:
         # Catch malformed Python (including escaped newlines) before any DB setup.
         # compileall does not import modules or require running services.
         run: python -m compileall -q app tests
-      - name: Lint
-        id: lint
-        continue-on-error: true
+      - name: Lint (required)
         run: ruff check . --output-format github
       - name: Prepare PostgreSQL schema
         run: |
