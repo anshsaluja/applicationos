@@ -15,7 +15,7 @@ from app.persistence import (
     WorkflowOutboxRepository,
     WorkflowRepository,
 )
-from test_claim_ready_postgres import factory as factory
+from test_claim_ready_postgres import factory  # noqa: F401
 
 
 def _running(session):
