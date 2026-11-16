@@ -380,7 +380,6 @@ class WorkflowOutboxRepository:
         establish that their effect adapter completed successfully. A crashed
         worker's claimed row remains claimed until explicit reconciliation.
         """
-        from .domain.approvals import ApprovalGateError, require_approved
         from .domain.workflows import WorkflowStatus, WorkflowTransitionError
 
         row = (
