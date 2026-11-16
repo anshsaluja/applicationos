@@ -46,3 +46,25 @@ def test_pending_claim_quarantines_corrupted_approved_reviewer(factory):
         assert outbox.claim_next_pending(action_id=action_id) is None
         from app.persistence import WorkflowOutboxRow
         assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
+
+
+def test_dispatch_completion_rejects_corrupted_reviewer(factory):
+    """A worker must recheck approval after claiming, before recording completion."""
+    with factory.begin() as session:
+        action_id = _running(session)
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(action_id)
+        assert outbox.claim_next_pending(action_id=action_id) is not None
+
+    with factory.begin() as session:
+        session.get(ApprovalRow, action_id).reviewer_id = "bad reviewer"
+
+    with factory.begin() as session:
+        with pytest.raises(WorkflowTransitionError, match="approval changed"):
+            WorkflowOutboxRepository(session).mark_dispatched(action_id, synthetic_receipt=True)
+
+    from app.persistence import SyntheticReceiptRow, WorkflowOutboxRow
+
+    with factory.begin() as session:
+        assert session.get(WorkflowOutboxRow, action_id).status == "claimed"
+        assert session.get(SyntheticReceiptRow, action_id) is None
