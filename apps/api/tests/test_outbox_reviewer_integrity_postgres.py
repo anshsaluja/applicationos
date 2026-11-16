@@ -112,3 +112,24 @@ def test_dispatch_completion_rejects_corrupted_retry_budget(factory, attempt, ma
     with factory.begin() as session:
         assert session.get(WorkflowOutboxRow, action_id).status == "claimed"
         assert session.get(SyntheticReceiptRow, action_id) is None
+
+
+@pytest.mark.parametrize(
+    ("attempt", "max_attempts"),
+    [(0, 2), (-1, 2), (1, 0), (3, 2)],
+)
+def test_pending_claim_quarantines_corrupted_retry_budget(factory, attempt, max_attempts):
+    """Invalid persisted retry counters must not yield executable outbox work."""
+    with factory.begin() as session:
+        action_id = _running(session)
+        WorkflowOutboxRepository(session).enqueue_claimed(action_id)
+        workflow = session.get(WorkflowRow, action_id)
+        workflow.attempt = attempt
+        workflow.max_attempts = max_attempts
+
+    with factory.begin() as session:
+        assert WorkflowOutboxRepository(session).claim_next_pending(action_id=action_id) is None
+
+    with factory.begin() as session:
+        assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
+        assert session.get(SyntheticReceiptRow, action_id) is None
