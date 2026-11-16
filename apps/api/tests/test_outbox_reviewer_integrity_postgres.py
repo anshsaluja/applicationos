@@ -18,7 +18,10 @@ from app.persistence import (
     WorkflowOutboxRow,
     WorkflowOutboxRepository,
     WorkflowRepository,
+    WorkflowRow,
 )
+
+
 @pytest.fixture(scope="module")
 def factory():
     """Connect only to an explicitly configured disposable PostgreSQL test DB."""
@@ -77,6 +80,33 @@ def test_dispatch_completion_rejects_corrupted_reviewer(factory):
         session.get(ApprovalRow, action_id).reviewer_id = "bad reviewer"
 
     with factory.begin() as session, pytest.raises(WorkflowTransitionError, match="approval changed"):
+        WorkflowOutboxRepository(session).mark_dispatched(action_id, synthetic_receipt=True)
+
+    with factory.begin() as session:
+        assert session.get(WorkflowOutboxRow, action_id).status == "claimed"
+        assert session.get(SyntheticReceiptRow, action_id) is None
+
+
+@pytest.mark.parametrize(
+    ("attempt", "max_attempts"),
+    [(0, 2), (-1, 2), (1, 0), (3, 2)],
+)
+def test_dispatch_completion_rejects_corrupted_retry_budget(factory, attempt, max_attempts):
+    """A claimed outbox row cannot confirm a corrupted execution checkpoint."""
+    with factory.begin() as session:
+        action_id = _running(session)
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(action_id)
+        assert outbox.claim_next_pending(action_id=action_id) is not None
+
+    with factory.begin() as session:
+        workflow = session.get(WorkflowRow, action_id)
+        workflow.attempt = attempt
+        workflow.max_attempts = max_attempts
+
+    with factory.begin() as session, pytest.raises(
+        WorkflowTransitionError, match="checkpoint or approval changed"
+    ):
         WorkflowOutboxRepository(session).mark_dispatched(action_id, synthetic_receipt=True)
 
     with factory.begin() as session:
