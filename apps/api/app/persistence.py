@@ -244,10 +244,19 @@ class WorkflowOutboxRepository:
     def __init__(self, session):
         self.session = session
 
+    def _has_valid_approval(self, action_id: UUID) -> bool:
+        from .domain.approvals import ApprovalGateError, require_approved
+
+        try:
+            require_approved(ApprovalRepository(self.session).get(action_id), action_id)
+        except ApprovalGateError:
+            return False
+        return True
+
     def enqueue_claimed(self, action_id: UUID) -> WorkflowOutboxRow:
         from sqlalchemy.dialects.postgresql import insert
 
-        from .domain.approvals import ApprovalStatus
+        from .domain.approvals import ApprovalGateError, require_approved
         from .domain.workflows import WorkflowStatus, WorkflowTransitionError
 
         row = (
@@ -259,8 +268,10 @@ class WorkflowOutboxRepository:
         if row is None or row.status != WorkflowStatus.RUNNING.value:
             raise WorkflowTransitionError("Only a claimed running workflow can be enqueued")
         approval = ApprovalRepository(self.session).get(action_id)
-        if approval.status != ApprovalStatus.APPROVED:
-            raise WorkflowTransitionError("Persisted approval required for outbox enqueue")
+        try:
+            require_approved(approval, action_id)
+        except ApprovalGateError as exc:
+            raise WorkflowTransitionError("Persisted approval required for outbox enqueue") from exc
 
         statement = (
             insert(WorkflowOutboxRow)
@@ -288,7 +299,7 @@ class WorkflowOutboxRepository:
         Claiming is not a lease: interrupted claims require explicit
         reconciliation before any retry or external side effect.
         """
-        from .domain.approvals import ApprovalStatus
+        from .domain.approvals import ApprovalGateError, require_approved
         from .domain.workflows import WorkflowStatus
 
         query = self.session.query(WorkflowOutboxRow).filter(WorkflowOutboxRow.status == "pending")
@@ -308,6 +319,11 @@ class WorkflowOutboxRepository:
                 .one_or_none()
             )
             approval = ApprovalRepository(self.session).get(row.action_id)
+            try:
+                require_approved(approval, row.action_id)
+                valid_approval = True
+            except ApprovalGateError:
+                valid_approval = False
             # A receipt indicates a prior worker may have completed its effect.
             # Never reclaim this intent, even if the receipt is malformed.
             receipt_exists = self.session.get(SyntheticReceiptRow, row.action_id) is not None
@@ -315,7 +331,7 @@ class WorkflowOutboxRepository:
                 workflow is None
                 or workflow.status != WorkflowStatus.RUNNING.value
                 or workflow.idempotency_key != row.idempotency_key
-                or approval.status != ApprovalStatus.APPROVED
+                or not valid_approval
                 or receipt_exists
             ):
                 row.status = "quarantined"
@@ -364,7 +380,7 @@ class WorkflowOutboxRepository:
         establish that their effect adapter completed successfully. A crashed
         worker's claimed row remains claimed until explicit reconciliation.
         """
-        from .domain.approvals import ApprovalStatus
+        from .domain.approvals import ApprovalGateError, require_approved
         from .domain.workflows import WorkflowStatus, WorkflowTransitionError
 
         row = (
@@ -411,7 +427,7 @@ class WorkflowOutboxRepository:
             workflow is None
             or workflow.status != WorkflowStatus.RUNNING.value
             or workflow.idempotency_key != row.idempotency_key
-            or ApprovalRepository(self.session).get(action_id).status != ApprovalStatus.APPROVED
+            or not self._has_valid_approval(action_id)
         ):
             raise WorkflowTransitionError("Workflow checkpoint or approval changed before dispatch completion")
         if synthetic_receipt:
