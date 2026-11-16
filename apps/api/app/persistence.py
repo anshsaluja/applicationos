@@ -478,6 +478,9 @@ class WorkflowOutboxRepository:
             return workflow
         if workflow.status != WorkflowStatus.RUNNING.value:
             raise WorkflowTransitionError("Only running workflows can complete")
+        # Reject corrupted RUNNING checkpoints even when a receipt exists.
+        if not 1 <= workflow.attempt <= workflow.max_attempts:
+            raise WorkflowTransitionError("Invalid execution attempt at synthetic completion")
         # Dispatch and completion can occur in separate transactions. Recheck
         # the persisted approval at the final state transition so a corrupted
         # or revoked decision cannot turn a receipt into workflow success.
