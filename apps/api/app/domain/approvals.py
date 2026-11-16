@@ -6,6 +6,7 @@ connecting this policy to any workflow executor.
 """
 from __future__ import annotations
 
+import unicodedata
 from enum import StrEnum
 from uuid import UUID
 
@@ -29,6 +30,14 @@ class ApprovalGateError(ValueError):
     pass
 
 
+def _valid_reviewer_id(value: str | None) -> bool:
+    """Reject ambiguous identities even when loading persisted decisions."""
+    return bool(value and value == value.strip() and not any(
+        char.isspace() or unicodedata.category(char) in {"Cc", "Cf", "Cs", "Cn"}
+        for char in value
+    ))
+
+
 def decide(
     current: ApprovalDecision,
     requested: ApprovalStatus,
@@ -38,8 +47,8 @@ def decide(
 ) -> ApprovalDecision:
     """Allow a single terminal decision; repeated identical decisions are idempotent."""
     reviewer_id = reviewer_id.strip()
-    if not reviewer_id:
-        raise ApprovalGateError("A reviewer identity is required")
+    if not _valid_reviewer_id(reviewer_id):
+        raise ApprovalGateError("A valid reviewer identity is required")
     if requested == ApprovalStatus.PENDING:
         raise ApprovalGateError("Cannot transition back to pending")
     if requested == ApprovalStatus.REJECTED and not (reason or "").strip():
@@ -62,5 +71,5 @@ def require_approved(decision: ApprovalDecision | None, action_id: UUID) -> None
     """Fail closed on missing, mismatched, pending, or rejected decisions."""
     if decision is None or decision.action_id != action_id:
         raise ApprovalGateError("No matching approval decision")
-    if decision.status != ApprovalStatus.APPROVED or not (decision.reviewer_id or "").strip():
+    if decision.status != ApprovalStatus.APPROVED or not _valid_reviewer_id(decision.reviewer_id):
         raise ApprovalGateError("Action has not been approved")
