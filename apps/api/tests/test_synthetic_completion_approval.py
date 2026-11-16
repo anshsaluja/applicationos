@@ -50,11 +50,11 @@ class FakeSession:
         self.flush_count += 1
 
 
-def make_session(status="running"):
+def make_session(status="running", attempt=1, max_attempts=3):
     action_id = uuid4()
     key = "synthetic:approval-recheck"
     outbox = SimpleNamespace(action_id=action_id, idempotency_key=key, status="dispatched")
-    workflow = SimpleNamespace(action_id=action_id, idempotency_key=key, status=status, last_error="previous")
+    workflow = SimpleNamespace(action_id=action_id, idempotency_key=key, status=status, attempt=attempt, max_attempts=max_attempts, last_error="previous")
     receipt = SimpleNamespace(action_id=action_id, idempotency_key=key, adapter="synthetic-noop")
     return action_id, FakeSession(outbox, workflow, receipt)
 
@@ -90,4 +90,19 @@ def test_terminal_synthetic_replay_remains_read_only(monkeypatch):
         lambda action: pytest.fail("Terminal replay must not reauthorize or mutate"),
     )
     assert repository.complete_synthetic(action_id).status == "succeeded"
+    assert session.flush_count == 0
+
+
+@pytest.mark.parametrize("attempt,max_attempts", [(0, 3), (4, 3), (1, 0)])
+def test_synthetic_completion_rejects_corrupt_attempt_checkpoint(monkeypatch, attempt, max_attempts):
+    action_id, session = make_session(attempt=attempt, max_attempts=max_attempts)
+    repository = WorkflowOutboxRepository(session)
+    monkeypatch.setattr(
+        repository, "_has_valid_approval",
+        lambda action: pytest.fail("Corrupt checkpoint must fail before approval lookup"),
+    )
+    with pytest.raises(WorkflowTransitionError, match="Invalid execution attempt"):
+        repository.complete_synthetic(action_id)
+    assert session.workflow.status == "running"
+    assert session.workflow.last_error == "previous"
     assert session.flush_count == 0
