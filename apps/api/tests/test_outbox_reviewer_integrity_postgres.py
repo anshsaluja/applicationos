@@ -1,4 +1,5 @@
 """Regression coverage for persisted approval identity checks at outbox boundaries."""
+
 from __future__ import annotations
 
 from uuid import uuid4
@@ -9,10 +10,12 @@ from app.domain.workflows import WorkflowState, WorkflowStatus, WorkflowTransiti
 from app.persistence import (
     ApprovalRepository,
     ApprovalRow,
+    SyntheticReceiptRow,
+    WorkflowOutboxRow,
     WorkflowOutboxRepository,
     WorkflowRepository,
 )
-from test_claim_ready_postgres import factory
+from test_claim_ready_postgres import factory as factory
 
 
 def _running(session):
@@ -44,7 +47,6 @@ def test_pending_claim_quarantines_corrupted_approved_reviewer(factory):
     with factory.begin() as session:
         outbox = WorkflowOutboxRepository(session)
         assert outbox.claim_next_pending(action_id=action_id) is None
-        from app.persistence import WorkflowOutboxRow
         assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
 
 
@@ -59,11 +61,8 @@ def test_dispatch_completion_rejects_corrupted_reviewer(factory):
     with factory.begin() as session:
         session.get(ApprovalRow, action_id).reviewer_id = "bad reviewer"
 
-    with factory.begin() as session:
-        with pytest.raises(WorkflowTransitionError, match="approval changed"):
-            WorkflowOutboxRepository(session).mark_dispatched(action_id, synthetic_receipt=True)
-
-    from app.persistence import SyntheticReceiptRow, WorkflowOutboxRow
+    with factory.begin() as session, pytest.raises(WorkflowTransitionError, match="approval changed"):
+        WorkflowOutboxRepository(session).mark_dispatched(action_id, synthetic_receipt=True)
 
     with factory.begin() as session:
         assert session.get(WorkflowOutboxRow, action_id).status == "claimed"
