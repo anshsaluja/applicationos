@@ -2,20 +2,35 @@
 
 from __future__ import annotations
 
+import os
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from app.domain.workflows import WorkflowState, WorkflowStatus, WorkflowTransitionError
 from app.persistence import (
     ApprovalRepository,
     ApprovalRow,
+    Base,
     SyntheticReceiptRow,
     WorkflowOutboxRow,
     WorkflowOutboxRepository,
     WorkflowRepository,
 )
-from test_claim_ready_postgres import factory  # noqa: F401
+@pytest.fixture(scope="module")
+def factory():
+    """Connect only to an explicitly configured disposable PostgreSQL test DB."""
+    url = os.getenv("TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+    if not url.startswith(("postgresql+psycopg://", "postgresql://")):
+        pytest.fail("TEST_DATABASE_URL must point to PostgreSQL")
+    engine = create_engine(url, pool_pre_ping=True)
+    Base.metadata.create_all(engine)
+    yield sessionmaker(bind=engine, expire_on_commit=False)
+    engine.dispose()
 
 
 def _running(session):
