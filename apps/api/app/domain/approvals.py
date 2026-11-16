@@ -46,7 +46,6 @@ def decide(
     reason: str | None = None,
 ) -> ApprovalDecision:
     """Allow a single terminal decision; repeated identical decisions are idempotent."""
-    reviewer_id = reviewer_id.strip()
     if not _valid_reviewer_id(reviewer_id):
         raise ApprovalGateError("A valid reviewer identity is required")
     if requested == ApprovalStatus.PENDING:
