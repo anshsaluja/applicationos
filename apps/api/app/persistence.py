@@ -429,6 +429,7 @@ class WorkflowOutboxRepository:
             workflow is None
             or workflow.status != WorkflowStatus.RUNNING.value
             or workflow.idempotency_key != row.idempotency_key
+            or not 1 <= workflow.attempt <= workflow.max_attempts
             or not self._has_valid_approval(action_id)
         ):
             raise WorkflowTransitionError("Workflow checkpoint or approval changed before dispatch completion")
