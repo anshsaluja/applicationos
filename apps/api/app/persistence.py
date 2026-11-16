@@ -478,6 +478,11 @@ class WorkflowOutboxRepository:
             return workflow
         if workflow.status != WorkflowStatus.RUNNING.value:
             raise WorkflowTransitionError("Only running workflows can complete")
+        # Dispatch and completion can occur in separate transactions. Recheck
+        # the persisted approval at the final state transition so a corrupted
+        # or revoked decision cannot turn a receipt into workflow success.
+        if not self._has_valid_approval(action_id):
+            raise WorkflowTransitionError("Persisted approval required for synthetic completion")
         workflow.status = WorkflowStatus.SUCCEEDED.value
         workflow.last_error = None
         self.session.flush()
