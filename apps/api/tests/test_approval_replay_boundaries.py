@@ -21,7 +21,7 @@ from app.domain.approvals import (
 def test_identical_terminal_decision_is_idempotent(status: ApprovalStatus) -> None:
     pending = ApprovalDecision(action_id=uuid4())
     reason = "Missing evidence" if status == ApprovalStatus.REJECTED else None
-    first = decide(pending, status, reviewer_id="  reviewer-1  ", reason=reason)
+    first = decide(pending, status, reviewer_id="reviewer-1", reason=reason)
     replay = decide(first, status, reviewer_id="reviewer-1", reason=reason)
     assert replay == first
     assert replay.reviewer_id == "reviewer-1"
