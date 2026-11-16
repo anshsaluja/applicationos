@@ -331,6 +331,9 @@ class WorkflowOutboxRepository:
                 workflow is None
                 or workflow.status != WorkflowStatus.RUNNING.value
                 or workflow.idempotency_key != row.idempotency_key
+                or workflow.max_attempts < 1
+                or workflow.attempt < 1
+                or workflow.attempt > workflow.max_attempts
                 or not valid_approval
                 or receipt_exists
             ):
