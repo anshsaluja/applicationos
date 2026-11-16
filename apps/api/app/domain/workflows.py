@@ -67,7 +67,7 @@ def transition(
     # Reject corrupted or stale persisted checkpoints before even an idempotent
     # replay can make them appear authorized. A READY checkpoint at the retry
     # limit cannot legitimately be dispatched again.
-    if state.attempt > state.max_attempts:
+    if not 1 <= state.max_attempts <= 10 or not 0 <= state.attempt <= state.max_attempts:
         raise WorkflowTransitionError("Invalid execution attempt")
     # RUNNING and SUCCEEDED both require a previously claimed execution.
     # Reject fabricated zero-attempt checkpoints even on idempotent replay.
