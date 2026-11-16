@@ -4,6 +4,8 @@ The adapter has no external side effects. These tests require DATABASE_URL to
 point to a disposable PostgreSQL database initialized by the test/CI setup.
 """
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from uuid import uuid4
 
 from app.domain.approvals import ApprovalStatus
@@ -79,5 +81,34 @@ def test_crash_after_claim_cannot_silently_replay_synthetic_action():
         )
         assert recovered.status == WorkflowStatus.FAILED
         assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
+
+    assert dispatch_one_synthetic(factory, action_id=action_id) is None
+
+
+def test_concurrent_synthetic_workers_dispatch_once():
+    """Two workers racing on one outbox row must produce one durable receipt."""
+    factory = build_session_factory()
+    action_id, key = prepare_approved_dispatch(factory)
+    barrier = Barrier(2)
+
+    def run_worker():
+        barrier.wait(timeout=10)
+        return dispatch_one_synthetic(factory, action_id=action_id)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(run_worker) for _ in range(2)]
+        receipts = [future.result(timeout=20) for future in futures]
+
+    winners = [receipt for receipt in receipts if receipt is not None]
+    assert len(winners) == 1
+    assert winners[0].action_id == action_id
+    assert winners[0].idempotency_key == key
+
+    with session_scope(factory) as session:
+        assert WorkflowRepository(session).get(action_id).status == WorkflowStatus.SUCCEEDED
+        assert session.get(WorkflowOutboxRow, action_id).status == "dispatched"
+        persisted = session.get(SyntheticReceiptRow, action_id)
+        assert persisted is not None
+        assert persisted.idempotency_key == key
 
     assert dispatch_one_synthetic(factory, action_id=action_id) is None
