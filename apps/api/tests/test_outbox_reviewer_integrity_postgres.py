@@ -133,3 +133,31 @@ def test_pending_claim_quarantines_corrupted_retry_budget(factory, attempt, max_
     with factory.begin() as session:
         assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
         assert session.get(SyntheticReceiptRow, action_id) is None
+
+
+def test_batch_claim_skips_quarantined_intent_and_returns_valid_work(factory):
+    """A poisoned earlier intent must not starve a later authorized dispatch."""
+    with factory.begin() as session:
+        invalid_id = _running(session)
+        valid_id = _running(session)
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(invalid_id)
+        outbox.enqueue_claimed(valid_id)
+        # Explicitly order the rows so the invalid one is selected first.
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        session.get(WorkflowOutboxRow, invalid_id).created_at = now - timedelta(minutes=1)
+        session.get(WorkflowOutboxRow, valid_id).created_at = now
+        session.get(WorkflowRow, invalid_id).attempt = 0
+
+    with factory.begin() as session:
+        claimed = WorkflowOutboxRepository(session).claim_next_pending()
+        assert claimed is not None
+        assert claimed.action_id == valid_id
+        assert session.get(WorkflowOutboxRow, invalid_id).status == "quarantined"
+        assert session.get(WorkflowOutboxRow, valid_id).status == "claimed"
+
+    with factory.begin() as session:
+        assert WorkflowOutboxRepository(session).claim_next_pending() is None
+        assert session.get(SyntheticReceiptRow, invalid_id) is None
