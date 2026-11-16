@@ -63,6 +63,7 @@ jobs:
         # compileall does not import modules or require running services.
         run: python -m compileall -q app tests
       - name: Lint (required)
+        id: lint
         run: ruff check . --output-format github
       - name: Prepare PostgreSQL schema
         run: |
