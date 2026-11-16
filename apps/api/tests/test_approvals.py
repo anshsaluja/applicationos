@@ -46,3 +46,27 @@ def test_approved_decision_cannot_be_changed_or_reset():
     for status in (ApprovalStatus.REJECTED, ApprovalStatus.PENDING):
         with pytest.raises(ApprovalGateError):
             decide(approved, status, reviewer_id="reviewer-2", reason="changed")
+
+
+@pytest.mark.parametrize("reviewer_id", ["a" * 129, "x" * 10000])
+def test_oversized_reviewer_identity_fails_closed_on_decision_and_replay(reviewer_id):
+    action_id = uuid4()
+    pending = ApprovalDecision(action_id=action_id)
+    with pytest.raises(ApprovalGateError, match="valid reviewer identity"):
+        decide(pending, ApprovalStatus.APPROVED, reviewer_id=reviewer_id)
+
+    # A corrupted persisted approval must never authorize a consequential action.
+    persisted = ApprovalDecision(
+        action_id=action_id,
+        status=ApprovalStatus.APPROVED,
+        reviewer_id=reviewer_id,
+    )
+    with pytest.raises(ApprovalGateError, match="not been approved"):
+        require_approved(persisted, action_id)
+
+
+def test_maximum_length_reviewer_identity_remains_valid():
+    reviewer_id = "a" * 128
+    action_id = uuid4()
+    approved = decide(ApprovalDecision(action_id=action_id), ApprovalStatus.APPROVED, reviewer_id=reviewer_id)
+    require_approved(approved, action_id)
