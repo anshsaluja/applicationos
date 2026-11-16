@@ -123,3 +123,21 @@ def test_workflow_keys_reject_surrogates_and_unassigned_codepoints(key):
 def test_workflow_keys_preserve_valid_unicode_identifiers(key):
     state = WorkflowState(action_id=uuid4(), idempotency_key=key)
     assert state.idempotency_key == key
+
+
+@pytest.mark.parametrize("target", list(WorkflowStatus))
+def test_unclaimed_success_checkpoint_fails_closed_for_every_transition(target):
+    state, approved = setup()
+    corrupt = state.model_copy(update={"status": WorkflowStatus.SUCCEEDED, "attempt": 0})
+    with pytest.raises(WorkflowTransitionError, match="Invalid execution attempt"):
+        transition(corrupt, target, approval=approved)
+
+
+def test_legitimate_success_checkpoint_remains_idempotent():
+    state, approved = setup()
+    waiting = transition(state, WorkflowStatus.AWAITING_APPROVAL)
+    ready = transition(waiting, WorkflowStatus.READY, approval=approved)
+    running = transition(ready, WorkflowStatus.RUNNING, approval=approved)
+    succeeded = transition(running, WorkflowStatus.SUCCEEDED)
+    assert succeeded.attempt == 1
+    assert transition(succeeded, WorkflowStatus.SUCCEEDED) == succeeded
