@@ -30,4 +30,7 @@ def test_upload_filename_rejects_dot_only_navigation_labels():
     assert _safe_filename("..") == "document"
     assert _safe_filename("folder/..") == "document"
     assert _safe_filename("  .  ") == "document"
-    assert _safe_filename("...") == "..."
+    assert _safe_filename("...") == "document"
+    assert _safe_filename("folder/....") == "document"
+    assert _safe_filename("." * 300) == "document"
+    assert _safe_filename("report...") == "report..."
