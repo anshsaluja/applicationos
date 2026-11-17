@@ -54,7 +54,7 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
         raise HTTPException(status_code=422, detail="Invalid PDF signature")
     if media_type == "text/plain":
         try:
-            text = data.decode("utf-8", errors="strict")
+            text = data.decode("utf-8-sig", errors="strict")
         except UnicodeDecodeError as exc:
             raise HTTPException(status_code=422, detail="Plain-text document must be valid UTF-8") from exc
     else:
