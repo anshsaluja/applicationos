@@ -28,9 +28,20 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
     raw_type = upload.content_type or "application/octet-stream"
     media_type, *parameters = raw_type.split(";")
     media_type = media_type.strip().lower()
+    # Charset is meaningful only for text. Reject duplicate or malformed
+    # declarations rather than allowing conflicting client interpretations.
+    if parameters and media_type != "text/plain":
+        raise HTTPException(status_code=415, detail="Unsupported document content-type parameter")
+    if len(parameters) > 1:
+        raise HTTPException(status_code=415, detail="Unsupported document content-type parameter")
     for parameter in parameters:
         key, separator, value = parameter.strip().partition("=")
-        if not separator or key.strip().lower() != "charset" or value.strip().strip('"').lower() not in {"utf-8", "utf8"}:
+        value = value.strip()
+        if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+            value = value[1:-1]
+        elif '"' in value:
+            raise HTTPException(status_code=415, detail="Unsupported document content-type parameter")
+        if not separator or key.strip().lower() != "charset" or value.lower() not in {"utf-8", "utf8"}:
             raise HTTPException(status_code=415, detail="Unsupported document content-type parameter")
     if media_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=415, detail="Only PDF and plain-text documents are supported")
