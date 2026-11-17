@@ -38,6 +38,17 @@ def _valid_reviewer_id(value: str | None) -> bool:
     ))
 
 
+def _valid_reason(value: str | None) -> bool:
+    """Keep reviewer audit reasons bounded and safe to render in logs and UI."""
+    return value is None or (
+        len(value) <= 2000
+        and not any(
+            unicodedata.category(char) in {"Cc", "Cf", "Cs", "Cn"} and char not in "\n\t"
+            for char in value
+        )
+    )
+
+
 def decide(
     current: ApprovalDecision,
     requested: ApprovalStatus,
@@ -48,6 +59,8 @@ def decide(
     """Allow a single terminal decision; repeated identical decisions are idempotent."""
     if not _valid_reviewer_id(reviewer_id):
         raise ApprovalGateError("A valid reviewer identity is required")
+    if not _valid_reason(reason):
+        raise ApprovalGateError("Invalid approval reason")
     if requested == ApprovalStatus.PENDING:
         raise ApprovalGateError("Cannot transition back to pending")
     if requested == ApprovalStatus.REJECTED and not (reason or "").strip():
