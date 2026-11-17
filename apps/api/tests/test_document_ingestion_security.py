@@ -133,3 +133,28 @@ async def test_reject_unsupported_or_ambiguous_content_type_parameters(media_typ
     with pytest.raises(HTTPException) as exc:
         await ingest_upload(upload)
     assert exc.value.status_code == 415
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "media_type",
+    [
+        "text/plain; charset=utf-8; charset=utf-8",
+        "text/plain; charset=utf-8; charset=latin-1",
+        'text/plain; charset="utf-8',
+        'text/plain; charset=utf-8"',
+        "application/pdf; charset=utf-8",
+    ],
+)
+async def test_reject_duplicate_malformed_or_pdf_charset_parameters(media_type):
+    """Reject ambiguous MIME metadata before parsing or persisting evidence."""
+    from starlette.datastructures import Headers
+
+    upload = UploadFile(
+        filename="evidence.txt",
+        file=BytesIO(b"Evidence text"),
+        headers=Headers({"content-type": media_type}),
+    )
+    with pytest.raises(HTTPException) as exc:
+        await ingest_upload(upload)
+    assert exc.value.status_code == 415
