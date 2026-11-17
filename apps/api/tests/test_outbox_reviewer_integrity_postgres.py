@@ -57,6 +57,27 @@ def test_enqueue_rejects_corrupted_approved_reviewer(factory):
             WorkflowOutboxRepository(session).enqueue_claimed(action_id)
 
 
+@pytest.mark.parametrize(
+    ("attempt", "max_attempts"),
+    [(0, 2), (-1, 2), (1, 0), (3, 2)],
+)
+def test_enqueue_rejects_corrupted_retry_budget(factory, attempt, max_attempts):
+    """An invalid running checkpoint must never create a pending dispatch intent."""
+    with factory.begin() as session:
+        action_id = _running(session)
+        workflow = session.get(WorkflowRow, action_id)
+        workflow.attempt = attempt
+        workflow.max_attempts = max_attempts
+
+    with factory.begin() as session:
+        with pytest.raises(WorkflowTransitionError, match="Invalid execution attempt"):
+            WorkflowOutboxRepository(session).enqueue_claimed(action_id)
+
+    with factory.begin() as session:
+        assert session.get(WorkflowOutboxRow, action_id) is None
+        assert session.get(SyntheticReceiptRow, action_id) is None
+
+
 def test_pending_claim_quarantines_corrupted_approved_reviewer(factory):
     with factory.begin() as session:
         action_id = _running(session)
