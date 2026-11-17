@@ -206,3 +206,26 @@ def test_interrupted_claim_quarantine_never_requeues_or_receipts(factory):
         assert session.get(SyntheticReceiptRow, action_id) is None
         with pytest.raises(WorkflowTransitionError, match="Only claimed intents"):
             outbox.mark_dispatched(action_id, synthetic_receipt=True)
+
+
+def test_corrupt_enqueue_does_not_block_unrelated_authorized_work(factory):
+    """Rejecting one invalid checkpoint must not poison another workflow."""
+    with factory.begin() as session:
+        invalid_id = _running(session)
+        valid_id = _running(session)
+        session.get(WorkflowRow, invalid_id).attempt = 0
+
+    with factory.begin() as session:
+        outbox = WorkflowOutboxRepository(session)
+        with pytest.raises(WorkflowTransitionError, match="Invalid execution attempt"):
+            outbox.enqueue_claimed(invalid_id)
+
+    with factory.begin() as session:
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(valid_id)
+
+    with factory.begin() as session:
+        assert session.get(WorkflowOutboxRow, invalid_id) is None
+        assert session.get(SyntheticReceiptRow, invalid_id) is None
+        assert session.get(WorkflowOutboxRow, valid_id).status == "pending"
+        assert session.get(SyntheticReceiptRow, valid_id) is None
