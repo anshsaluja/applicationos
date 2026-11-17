@@ -33,10 +33,11 @@ if ! docker info >/dev/null 2>&1; then
   exit 2
 fi
 
-# Never disrupt a developer's already-running Compose stack.
-existing_services="$(docker compose ps --status running --services)"
+# Never disrupt an existing Compose stack, including stopped containers:
+# `up` could recreate them or unexpectedly reuse their persisted volumes.
+existing_services="$(docker compose ps --all --services)"
 if [[ -n "$existing_services" ]]; then
-  echo "Refusing to modify running Compose services: $existing_services" >&2
+  echo "Refusing to modify existing Compose services: $existing_services" >&2
   exit 2
 fi
 started_stack=0
