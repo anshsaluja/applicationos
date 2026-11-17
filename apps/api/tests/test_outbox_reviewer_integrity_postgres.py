@@ -16,8 +16,8 @@ from app.persistence import (
     ApprovalRow,
     Base,
     SyntheticReceiptRow,
-    WorkflowOutboxRow,
     WorkflowOutboxRepository,
+    WorkflowOutboxRow,
     WorkflowRepository,
     WorkflowRow,
 )
