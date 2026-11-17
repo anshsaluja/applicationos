@@ -40,6 +40,22 @@ if [[ -n "$existing_services" ]]; then
   echo "Refusing to modify existing Compose services: $existing_services" >&2
   exit 2
 fi
+# Compose may leave named volumes behind even after all containers are removed.
+# Never run a verification journey against potentially developer-owned data.
+# Resolve the Compose project name from its validated configuration rather
+# than guessing a directory prefix or trusting a caller-provided project name.
+docker compose config --quiet
+compose_project="$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
+if [[ -z "$compose_project" ]]; then
+  echo "Unable to determine Compose project name." >&2
+  exit 2
+fi
+existing_volumes="$(docker volume ls --filter "label=com.docker.compose.project=$compose_project" --format '{{.Name}}')"
+if [[ -n "$existing_volumes" ]]; then
+  echo "Refusing to reuse existing Compose volumes: $existing_volumes" >&2
+  exit 2
+fi
+
 started_stack=0
 cleanup() {
   if [[ "$started_stack" -eq 1 ]]; then
