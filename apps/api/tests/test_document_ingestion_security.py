@@ -111,3 +111,25 @@ async def test_reject_invisible_or_directional_evidence_text(payload, expected_d
         await ingest_upload(upload)
     assert exc.value.status_code == 422
     assert exc.value.detail == expected_detail
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("media_type", ["text/plain; charset=utf-8", "Text/Plain; Charset=\"UTF-8\"", "text/plain; charset=UTF8"])
+async def test_accept_explicit_utf8_text_content_type(media_type):
+    from starlette.datastructures import Headers
+
+    upload = UploadFile(filename="requirements.txt", file=BytesIO("Résumé required".encode("utf-8")), headers=Headers({"content-type": media_type}))
+    document = await ingest_upload(upload)
+    assert document.media_type == "text/plain"
+    assert document.text == "Résumé required"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("media_type", ["text/plain; charset=latin-1", "text/plain; boundary=ignored", "text/plain; charset=utf-8; charset=latin-1", "text/plain; invalid"])
+async def test_reject_unsupported_or_ambiguous_content_type_parameters(media_type):
+    from starlette.datastructures import Headers
+
+    upload = UploadFile(filename="requirements.txt", file=BytesIO(b"Submit a resume"), headers=Headers({"content-type": media_type}))
+    with pytest.raises(HTTPException) as exc:
+        await ingest_upload(upload)
+    assert exc.value.status_code == 415
