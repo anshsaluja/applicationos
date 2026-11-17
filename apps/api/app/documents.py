@@ -23,7 +23,15 @@ class IngestedDocument:
 
 
 async def ingest_upload(upload: UploadFile) -> IngestedDocument:
-    media_type = upload.content_type or "application/octet-stream"
+    # Multipart clients commonly append a charset parameter to text/plain.
+    # Accept UTF-8 explicitly, but never silently interpret another charset.
+    raw_type = upload.content_type or "application/octet-stream"
+    media_type, *parameters = raw_type.split(";")
+    media_type = media_type.strip().lower()
+    for parameter in parameters:
+        key, separator, value = parameter.strip().partition("=")
+        if not separator or key.strip().lower() != "charset" or value.strip().strip('"').lower() not in {"utf-8", "utf8"}:
+            raise HTTPException(status_code=415, detail="Unsupported document content-type parameter")
     if media_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=415, detail="Only PDF and plain-text documents are supported")
     data = await upload.read(MAX_DOCUMENT_BYTES + 1)
