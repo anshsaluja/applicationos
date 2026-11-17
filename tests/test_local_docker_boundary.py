@@ -171,7 +171,7 @@ class DockerEndpointSafetyTests(unittest.TestCase):
             fake = directory / "docker"
             fake.write_text(
                 "#!/usr/bin/env bash\n"
-                "printf '%s\n' \"$*\" >> \"$DOCKER_CALL_LOG\"\n"
+                "printf '%s\\n' \"$*\" >> \"$DOCKER_CALL_LOG\"\n"
                 "case \"$*\" in\n"
                 "  'compose version') exit 0 ;;\n"
                 "  'context show') echo default ;;\n"
