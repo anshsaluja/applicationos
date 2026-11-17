@@ -43,8 +43,7 @@ def _valid_reason(value: str | None) -> bool:
     return value is None or (
         len(value) <= 2000
         and not any(
-            unicodedata.category(char) in {"Cc", "Cf", "Cs", "Cn"} and char not in "
-\t"
+            unicodedata.category(char) in {"Cc", "Cf", "Cs", "Cn"} and char not in ("\n", "\t")
             for char in value
         )
     )
