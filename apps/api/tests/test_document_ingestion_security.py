@@ -86,3 +86,28 @@ async def test_allow_normal_text_layout_whitespace():
     )
     document = await ingest_upload(upload)
     assert document.text == "First\tcolumn\r\nSecond line"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload", "expected_detail"),
+    [
+        ("Approve\u202eDENY".encode("utf-8"), "Document contains unsupported bidirectional formatting"),
+        ("Approve\u2066DENY\u2069".encode("utf-8"), "Document contains unsupported bidirectional formatting"),
+        ("require\u200bment".encode("utf-8"), "Document contains unsupported Unicode formatting"),
+        ("confi\u00addential".encode("utf-8"), "Document contains unsupported Unicode formatting"),
+    ],
+)
+async def test_reject_invisible_or_directional_evidence_text(payload, expected_detail):
+    """A reviewer must not see visually misleading evidence or requirements."""
+    from starlette.datastructures import Headers
+
+    upload = UploadFile(
+        filename="evidence.txt",
+        file=BytesIO(payload),
+        headers=Headers({"content-type": "text/plain"}),
+    )
+    with pytest.raises(HTTPException) as exc:
+        await ingest_upload(upload)
+    assert exc.value.status_code == 422
+    assert exc.value.detail == expected_detail
