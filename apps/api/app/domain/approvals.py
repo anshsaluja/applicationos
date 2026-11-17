@@ -43,7 +43,8 @@ def _valid_reason(value: str | None) -> bool:
     return value is None or (
         len(value) <= 2000
         and not any(
-            unicodedata.category(char) in {"Cc", "Cf", "Cs", "Cn"} and char not in "\n\t"
+            unicodedata.category(char) in {"Cc", "Cf", "Cs", "Cn"} and char not in "
+\t"
             for char in value
         )
     )
@@ -83,5 +84,9 @@ def require_approved(decision: ApprovalDecision | None, action_id: UUID) -> None
     """Fail closed on missing, mismatched, pending, or rejected decisions."""
     if decision is None or decision.action_id != action_id:
         raise ApprovalGateError("No matching approval decision")
-    if (\n        decision.status != ApprovalStatus.APPROVED\n        or not _valid_reviewer_id(decision.reviewer_id)\n        or not _valid_reason(decision.reason)\n    ):
+    if (
+        decision.status != ApprovalStatus.APPROVED
+        or not _valid_reviewer_id(decision.reviewer_id)
+        or not _valid_reason(decision.reason)
+    ):
         raise ApprovalGateError("Action has not been approved")
