@@ -163,5 +163,45 @@ class DockerEndpointSafetyTests(unittest.TestCase):
             self.assertNotIn("compose up", calls.read_text())
 
 
+    def test_orphaned_compose_volume_blocks_startup(self):
+        # Containers may be gone while developer-owned named volumes remain.
+        with tempfile.TemporaryDirectory() as temp:
+            directory = pathlib.Path(temp)
+            calls = directory / "calls"
+            fake = directory / "docker"
+            fake.write_text(
+                "#!/usr/bin/env bash\\n"
+                "printf '%s\\n' \\"$*\\" >> \\"$DOCKER_CALL_LOG\\"\\n"
+                "case \\"$*\\" in\\n"
+                "  'compose version') exit 0 ;;\\n"
+                "  'context show') echo default ;;\\n"
+                "  context\\ inspect\\ *\\ --format\\ *) echo unix:///var/run/docker.sock ;;\\n"
+                "  'info') exit 0 ;;\\n"
+                "  'compose ps --all --services') exit 0 ;;\\n"
+                "  'compose config --quiet') exit 0 ;;\\n"
+                "  'compose config --format json') echo '{\\"name\\":\\"applicationos\\"}' ;;\\n"
+                "  volume\\ ls\\ *) echo applicationos_postgres_data ;;\\n"
+                "  *) echo unexpected-operation >&2; exit 99 ;;\\n"
+                "esac\\n"
+            )
+            fake.chmod(0o755)
+            env = os.environ.copy()
+            env.update({
+                "PATH": str(directory) + os.pathsep + env["PATH"],
+                "DOCKER_CALL_LOG": str(calls),
+                "DOCKER_HOST": "",
+            })
+            env.pop("DOCKER_CONTEXT", None)
+            result = subprocess.run(
+                ["bash", str(SCRIPT)], cwd=ROOT, env=env,
+                capture_output=True, text=True, timeout=15, check=False,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("Refusing to reuse existing Compose volumes", result.stderr)
+            self.assertIn("applicationos_postgres_data", result.stderr)
+            self.assertIn("volume ls --filter label=com.docker.compose.project=applicationos", calls.read_text())
+            self.assertNotIn("compose up", calls.read_text())
+
+
 if __name__ == "__main__":
     unittest.main()
