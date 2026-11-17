@@ -23,3 +23,11 @@ def test_upload_filename_is_bounded_and_has_safe_fallback():
 
 def test_upload_filename_normalizes_equivalent_unicode():
     assert _safe_filename("re\u0301sume\u0301.txt") == "résumé.txt"
+
+
+def test_upload_filename_rejects_dot_only_navigation_labels():
+    assert _safe_filename(".") == "document"
+    assert _safe_filename("..") == "document"
+    assert _safe_filename("folder/..") == "document"
+    assert _safe_filename("  .  ") == "document"
+    assert _safe_filename("...") == "..."
