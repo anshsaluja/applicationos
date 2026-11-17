@@ -97,4 +97,4 @@ def _safe_filename(filename: str | None) -> str:
     # Dot-only names are filesystem navigation tokens, not useful provenance labels.
     # Reject them even though the original path separators have been removed.
     basename = basename[:240].strip()
-    return basename if basename not in {"", ".", ".."} else "document"
+    return basename if basename and any(ch != "." for ch in basename) else "document"
