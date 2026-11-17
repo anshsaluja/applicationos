@@ -204,8 +204,11 @@ def test_interrupted_claim_quarantine_never_requeues_or_receipts(factory):
         assert outbox.claim_next_pending(action_id=action_id) is None
         assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
         assert session.get(SyntheticReceiptRow, action_id) is None
-        with pytest.raises(WorkflowTransitionError, match="Only claimed intents"):
-            outbox.mark_dispatched(action_id, synthetic_receipt=True)
+
+    with factory.begin() as session, pytest.raises(
+        WorkflowTransitionError, match="Only claimed intents"
+    ):
+        WorkflowOutboxRepository(session).mark_dispatched(action_id, synthetic_receipt=True)
 
 
 def test_corrupt_enqueue_does_not_block_unrelated_authorized_work(factory):
