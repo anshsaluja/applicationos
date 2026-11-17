@@ -134,16 +134,16 @@ class DockerEndpointSafetyTests(unittest.TestCase):
             calls = directory / "calls"
             fake = directory / "docker"
             fake.write_text(
-                "#!/usr/bin/env bash\\n"
-                "printf '%s\\\\n' \\"$*\\" >> \\"$DOCKER_CALL_LOG\\"\\n"
-                "case \\"$*\\" in\\n"
-                "  'compose version') exit 0 ;;\\n"
-                "  'context show') echo default ;;\\n"
-                "  context\\\\ inspect\\\\ *\\\\ --format\\\\ *) echo unix:///var/run/docker.sock ;;\\n"
-                "  'info') exit 0 ;;\\n"
-                "  'compose ps --all --services') echo postgres ;;\\n"
-                "  *) echo unexpected-operation >&2; exit 99 ;;\\n"
-                "esac\\n"
+                "#!/usr/bin/env bash\n"
+                "printf '%s\\n' \"$*\" >> \"$DOCKER_CALL_LOG\"\n"
+                "case \"$*\" in\n"
+                "  'compose version') exit 0 ;;\n"
+                "  'context show') echo default ;;\n"
+                "  context\\ inspect\\ *\\ --format\\ *) echo unix:///var/run/docker.sock ;;\n"
+                "  'info') exit 0 ;;\n"
+                "  'compose ps --all --services') echo postgres ;;\n"
+                "  *) echo unexpected-operation >&2; exit 99 ;;\n"
+                "esac\n"
             )
             fake.chmod(0o755)
             env = os.environ.copy()
