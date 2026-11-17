@@ -158,3 +158,24 @@ async def test_reject_duplicate_malformed_or_pdf_charset_parameters(media_type):
     with pytest.raises(HTTPException) as exc:
         await ingest_upload(upload)
     assert exc.value.status_code == 415
+
+@pytest.mark.asyncio
+async def test_leading_utf8_bom_preserves_original_digest():
+    import hashlib
+    from starlette.datastructures import Headers
+
+    payload = b"\xef\xbb\xbfSubmit evidence"
+    upload = UploadFile(filename="evidence.txt", file=BytesIO(payload), headers=Headers({"content-type": "text/plain; charset=utf-8"}))
+    document = await ingest_upload(upload)
+    assert document.text == "Submit evidence"
+    assert document.sha256 == hashlib.sha256(payload).hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_embedded_utf8_bom_remains_rejected():
+    from starlette.datastructures import Headers
+
+    upload = UploadFile(filename="evidence.txt", file=BytesIO("Submit\ufeff evidence".encode("utf-8")), headers=Headers({"content-type": "text/plain"}))
+    with pytest.raises(HTTPException) as exc:
+        await ingest_upload(upload)
+    assert exc.value.status_code == 422
