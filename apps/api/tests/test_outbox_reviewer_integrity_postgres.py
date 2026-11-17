@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -144,8 +145,6 @@ def test_batch_claim_skips_quarantined_intent_and_returns_valid_work(factory):
         outbox.enqueue_claimed(invalid_id)
         outbox.enqueue_claimed(valid_id)
         # Explicitly order the rows so the invalid one is selected first.
-        from datetime import UTC, datetime, timedelta
-
         now = datetime.now(UTC)
         session.get(WorkflowOutboxRow, invalid_id).created_at = now - timedelta(minutes=1)
         session.get(WorkflowOutboxRow, valid_id).created_at = now
@@ -161,3 +160,28 @@ def test_batch_claim_skips_quarantined_intent_and_returns_valid_work(factory):
     with factory.begin() as session:
         assert WorkflowOutboxRepository(session).claim_next_pending() is None
         assert session.get(SyntheticReceiptRow, invalid_id) is None
+
+
+def test_interrupted_claim_quarantine_never_requeues_or_receipts(factory):
+    """An interrupted worker cannot silently replay a claimed dispatch."""
+    with factory.begin() as session:
+        action_id = _running(session)
+        outbox = WorkflowOutboxRepository(session)
+        outbox.enqueue_claimed(action_id)
+        assert outbox.claim_next_pending(action_id=action_id) is not None
+
+    with factory.begin() as session:
+        outbox = WorkflowOutboxRepository(session)
+        quarantined = outbox.quarantine_interrupted_claim(
+            action_id, reason="worker stopped before receipt reconciliation"
+        )
+        assert quarantined.status == "quarantined"
+        assert outbox.quarantine_interrupted_claim(action_id, reason="already reconciled") is quarantined
+
+    with factory.begin() as session:
+        outbox = WorkflowOutboxRepository(session)
+        assert outbox.claim_next_pending(action_id=action_id) is None
+        assert session.get(WorkflowOutboxRow, action_id).status == "quarantined"
+        assert session.get(SyntheticReceiptRow, action_id) is None
+        with pytest.raises(WorkflowTransitionError, match="Only claimed intents"):
+            outbox.mark_dispatched(action_id, synthetic_receipt=True)
