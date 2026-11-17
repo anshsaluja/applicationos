@@ -8,6 +8,7 @@ from app.domain.approvals import (
     ApprovalGateError,
     ApprovalStatus,
     decide,
+    require_approved,
 )
 
 
@@ -34,3 +35,33 @@ def test_accept_normal_multiline_reason_and_preserve_idempotency():
 def test_rejection_still_requires_nonblank_reason():
     with pytest.raises(ApprovalGateError, match="Rejection requires a reason"):
         decide(ApprovalDecision(action_id=uuid4()), ApprovalStatus.REJECTED, reviewer_id="reviewer-1", reason="  ")
+
+
+@pytest.mark.parametrize("unsafe_reason", [
+    "Approved\u202eDENIED",
+    "Hidden\u200btext",
+    "Control\x00byte",
+    "A" * 2001,
+])
+def test_persisted_unsafe_approval_reason_fails_closed(unsafe_reason):
+    """A corrupt or legacy persisted approval cannot authorize execution."""
+    action_id = uuid4()
+    persisted = ApprovalDecision(
+        action_id=action_id,
+        status=ApprovalStatus.APPROVED,
+        reviewer_id="reviewer-1",
+        reason=unsafe_reason,
+    )
+    with pytest.raises(ApprovalGateError, match="Action has not been approved"):
+        require_approved(persisted, action_id)
+
+
+def test_persisted_safe_approval_reason_still_authorizes():
+    action_id = uuid4()
+    persisted = ApprovalDecision(
+        action_id=action_id,
+        status=ApprovalStatus.APPROVED,
+        reviewer_id="reviewer-1",
+        reason="Evidence reviewed",
+    )
+    require_approved(persisted, action_id)
