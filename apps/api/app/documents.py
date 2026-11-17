@@ -94,4 +94,7 @@ def _safe_filename(filename: str | None) -> str:
         ch for ch in unicodedata.normalize("NFC", basename)
         if ch.isprintable() and unicodedata.category(ch) != "Cf" and ch not in "/\\\\"
     ).strip()
-    return basename[:240] or "document"
+    # Dot-only names are filesystem navigation tokens, not useful provenance labels.
+    # Reject them even though the original path separators have been removed.
+    basename = basename[:240].strip()
+    return basename if basename not in {"", ".", ".."} else "document"
