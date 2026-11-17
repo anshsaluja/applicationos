@@ -267,6 +267,10 @@ class WorkflowOutboxRepository:
         )
         if row is None or row.status != WorkflowStatus.RUNNING.value:
             raise WorkflowTransitionError("Only a claimed running workflow can be enqueued")
+        # Fail closed before persisting a dispatch intent for a corrupt checkpoint.
+        # Claim and completion revalidate too, but enqueue must enforce the same gate.
+        if not 1 <= row.attempt <= row.max_attempts:
+            raise WorkflowTransitionError("Invalid execution attempt at outbox enqueue")
         approval = ApprovalRepository(self.session).get(action_id)
         try:
             require_approved(approval, action_id)
