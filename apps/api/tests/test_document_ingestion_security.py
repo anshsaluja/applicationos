@@ -1,7 +1,7 @@
 """Upload validation must reject unsafe inputs before database access."""
-from io import BytesIO
 
 import hashlib
+from io import BytesIO
 
 import pytest
 from fastapi import HTTPException, UploadFile
