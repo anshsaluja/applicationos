@@ -195,10 +195,13 @@ def test_stale_first_intent_does_not_starve_later_approved_work(factory):
             WorkflowOutboxRepository(session).enqueue_claimed(action_id)
 
     # Make ordering deterministic, independent of timestamp precision.
-    from datetime import UTC, datetime, timedelta
+    from datetime import UTC, datetime
+
     with factory.begin() as session:
-        session.get(WorkflowOutboxRow, stale_id).created_at = datetime.now(UTC) - timedelta(days=1)
-        session.get(WorkflowOutboxRow, valid_id).created_at = datetime.now(UTC)
+        # Other integration tests share this database and can leave pending
+        # intents. Use fixed, sufficiently early dates to make this pair first.
+        session.get(WorkflowOutboxRow, stale_id).created_at = datetime(2000, 1, 1, tzinfo=UTC)
+        session.get(WorkflowOutboxRow, valid_id).created_at = datetime(2000, 1, 2, tzinfo=UTC)
         from app.persistence import ApprovalRow
         session.get(ApprovalRow, stale_id).status = "rejected"
 
