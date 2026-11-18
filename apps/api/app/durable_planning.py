@@ -18,6 +18,8 @@ from .planning_graph import build_planning_graph
 
 def checkpoint_config(thread_id: UUID | str) -> dict:
     """Use a stable, nonempty action identifier to isolate graph histories."""
+    if not isinstance(thread_id, (UUID, str)):
+        raise ValueError("thread_id must be a UUID or string")
     identifier = str(thread_id)
     # Checkpoint keys are persisted and reused across restarts: never silently
     # normalize an ambiguous identifier into a different workflow identity.
