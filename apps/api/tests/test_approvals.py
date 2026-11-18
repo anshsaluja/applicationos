@@ -70,3 +70,18 @@ def test_maximum_length_reviewer_identity_remains_valid():
     action_id = uuid4()
     approved = decide(ApprovalDecision(action_id=action_id), ApprovalStatus.APPROVED, reviewer_id=reviewer_id)
     require_approved(approved, action_id)
+
+
+@pytest.mark.parametrize("reason", [None, "", "   ", "\n\t"])
+def test_persisted_rejection_without_justification_cannot_be_replayed(reason):
+    action_id = uuid4()
+    corrupted = ApprovalDecision(
+        action_id=action_id,
+        status=ApprovalStatus.REJECTED,
+        reviewer_id="reviewer-1",
+        reason=reason,
+    )
+    with pytest.raises(ApprovalGateError, match="Persisted approval decision is invalid"):
+        decide(corrupted, ApprovalStatus.REJECTED, reviewer_id="reviewer-1", reason=reason)
+    with pytest.raises(ApprovalGateError, match="not been approved"):
+        require_approved(corrupted, action_id)
