@@ -27,6 +27,13 @@ def test_checkpoint_config_rejects_non_string_identity(identifier):
         durable_planning.checkpoint_config(identifier)
 
 
+@pytest.mark.parametrize("identifier", ["action\\ue000", "action\\U000f0000", "action\\U00100000"])
+def test_checkpoint_config_rejects_private_use_identity(identifier):
+    """Private-use code points have no standardized visual identity."""
+    with pytest.raises(ValueError, match="thread_id"):
+        durable_planning.checkpoint_config(identifier)
+
+
 def test_checkpoint_connection_is_closed_and_setup_is_opt_in(monkeypatch):
     events = []
     saver = object()
