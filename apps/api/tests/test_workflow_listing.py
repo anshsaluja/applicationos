@@ -38,3 +38,26 @@ def test_workflow_list_rejects_unbounded_pagination():
     client = TestClient(app)
     for params in ({"limit": 0}, {"limit": 101}, {"offset": -1}, {"offset": 10001}):
         assert client.get("/v1/workflows", params=params).status_code == 422
+
+
+def test_workflow_listing_pages_are_stable_without_duplicates():
+    """A read-only listing must not repeat or reorder records between requests."""
+    client = TestClient(app)
+    snapshot = client.get("/v1/workflows", params={"limit": 100, "offset": 0})
+    assert snapshot.status_code == 200
+    expected = [row["action_id"] for row in snapshot.json()]
+    assert len(expected) == len(set(expected))
+
+    page_size = 7
+    actual = []
+    for offset in range(0, len(expected), page_size):
+        response = client.get(
+            "/v1/workflows", params={"limit": page_size, "offset": offset}
+        )
+        assert response.status_code == 200
+        actual.extend(row["action_id"] for row in response.json())
+
+    assert actual == expected
+    assert client.get(
+        "/v1/workflows", params={"limit": page_size, "offset": 0}
+    ).json() == snapshot.json()[:page_size]
