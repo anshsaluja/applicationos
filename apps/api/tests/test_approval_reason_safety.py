@@ -70,9 +70,9 @@ def test_persisted_safe_approval_reason_still_authorizes():
 @pytest.mark.parametrize(
     ("reviewer_id", "reason"),
     [
-        ("reviewer-1", "Hidden\\u200btext"),
+        ("reviewer-1", "Hidden\u200btext"),
         ("reviewer-1", "A" * 2001),
-        ("reviewer\\u202e-1", "Evidence reviewed"),
+        ("reviewer\u202e-1", "Evidence reviewed"),
         ("reviewer 1", "Evidence reviewed"),
     ],
 )
