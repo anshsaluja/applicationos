@@ -57,6 +57,14 @@ def decide(
     reason: str | None = None,
 ) -> ApprovalDecision:
     """Allow a single terminal decision; repeated identical decisions are idempotent."""
+    # Validate persisted terminal records before the incoming request. Otherwise
+    # malformed replay input can mask corruption with an unrelated error.
+    if current.status != ApprovalStatus.PENDING and (
+        not _valid_reviewer_id(current.reviewer_id)
+        or not _valid_reason(current.reason)
+        or (current.status == ApprovalStatus.REJECTED and not (current.reason or "").strip())
+    ):
+        raise ApprovalGateError("Persisted approval decision is invalid")
     if not _valid_reviewer_id(reviewer_id):
         raise ApprovalGateError("A valid reviewer identity is required")
     if not _valid_reason(reason):
@@ -66,14 +74,6 @@ def decide(
     if requested == ApprovalStatus.REJECTED and not (reason or "").strip():
         raise ApprovalGateError("Rejection requires a reason")
     if current.status != ApprovalStatus.PENDING:
-        # A replay must not silently accept a corrupted legacy audit record.
-        # Execution also checks this boundary, but decision writes must fail closed.
-        if (
-            not _valid_reviewer_id(current.reviewer_id)
-            or not _valid_reason(current.reason)
-            or (current.status == ApprovalStatus.REJECTED and not (current.reason or "").strip())
-        ):
-            raise ApprovalGateError("Persisted approval decision is invalid")
         if current.status == requested and current.reviewer_id == reviewer_id and (
             current.reason or None
         ) == ((reason or "").strip() or None):
