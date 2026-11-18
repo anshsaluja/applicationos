@@ -9,7 +9,7 @@ from app.durable_planning import checkpoint_config
 
 @pytest.mark.parametrize(
     "identifier",
-    [" leading", "trailing ", "\tbad", "bad\nkey", "bad\x00key", "bad\x7fkey", "x" * 129],
+    [" leading", "trailing ", "\tbad", "bad\nkey", "bad\x00key", "bad\x7fkey", "x" * 129, "bad\u200bkey", "bad\u2060key", "bad\u00a0key", "bad\ud800key", "bad\u0378key"],
 )
 def test_ambiguous_checkpoint_keys_are_rejected(identifier: str) -> None:
     with pytest.raises(ValueError, match="thread_id"):
