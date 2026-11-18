@@ -188,3 +188,38 @@ def test_checkpoint_connection_closes_when_caller_fails(monkeypatch):
     ):
         raise RuntimeError("request interrupted")
     assert events == ["open", "close"]
+
+
+
+def test_checkpoint_connection_closes_when_migration_fails(monkeypatch):
+    """A failed schema migration must release the saver and never compile a graph."""
+    events = []
+
+    class FakeSaver:
+        @staticmethod
+        @contextmanager
+        def from_conn_string(dsn):
+            events.append("open")
+            try:
+                yield FakeSaver()
+            finally:
+                events.append("close")
+
+        def setup(self):
+            events.append("setup")
+            raise RuntimeError("checkpoint migration failed")
+
+    def unexpected_compile(*, checkpointer):
+        pytest.fail("graph must not compile after checkpoint migration failure")
+
+    monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
+    monkeypatch.setattr(durable_planning, "build_planning_graph", unexpected_compile)
+
+    with (
+        pytest.raises(RuntimeError, match="checkpoint migration failed"),
+        durable_planning.postgres_planning_graph(
+            "postgresql://localhost/test", initialize=True
+        ),
+    ):
+        pass
+    assert events == ["open", "setup", "close"]
