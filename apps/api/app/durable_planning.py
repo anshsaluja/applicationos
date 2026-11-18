@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+import unicodedata
 from uuid import UUID
 
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -24,7 +25,10 @@ def checkpoint_config(thread_id: UUID | str) -> dict:
         not identifier
         or identifier != identifier.strip()
         or len(identifier) > 128
-        or any(ord(char) < 32 or ord(char) == 127 for char in identifier)
+        or any(
+            char.isspace() or unicodedata.category(char) in {"Cc", "Cf", "Cs", "Cn"}
+            for char in identifier
+        )
     ):
         raise ValueError("A stable, bounded, printable thread_id is required")
     return {"configurable": {"thread_id": identifier}}
