@@ -1,6 +1,8 @@
 """Upload validation must reject unsafe inputs before database access."""
 from io import BytesIO
 
+import hashlib
+
 import pytest
 from fastapi import HTTPException, UploadFile
 
@@ -118,7 +120,7 @@ async def test_reject_invisible_or_directional_evidence_text(payload, expected_d
 async def test_accept_explicit_utf8_text_content_type(media_type):
     from starlette.datastructures import Headers
 
-    upload = UploadFile(filename="requirements.txt", file=BytesIO("Résumé required".encode("utf-8")), headers=Headers({"content-type": media_type}))
+    upload = UploadFile(filename="requirements.txt", file=BytesIO("Résumé required".encode()), headers=Headers({"content-type": media_type}))
     document = await ingest_upload(upload)
     assert document.media_type == "text/plain"
     assert document.text == "Résumé required"
@@ -161,7 +163,6 @@ async def test_reject_duplicate_malformed_or_pdf_charset_parameters(media_type):
 
 @pytest.mark.asyncio
 async def test_leading_utf8_bom_preserves_original_digest():
-    import hashlib
     from starlette.datastructures import Headers
 
     payload = b"\xef\xbb\xbfSubmit evidence"
