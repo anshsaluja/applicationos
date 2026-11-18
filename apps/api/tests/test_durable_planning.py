@@ -235,3 +235,17 @@ def test_checkpoint_connection_closes_when_migration_fails(monkeypatch):
     ):
         pass
     assert events == ["open", "setup", "close"]
+
+
+@pytest.mark.parametrize(
+    "invalid_dsn",
+    [
+        "postgresql://localhost",
+        "postgresql://localhost/",
+        "postgresql+psycopg://user:pass@localhost:5432",
+    ],
+)
+def test_checkpoint_dsn_requires_explicit_database(invalid_dsn):
+    """Never silently checkpoint to a driver-selected default database."""
+    with pytest.raises(ValueError, match="name a database"):
+        durable_planning.checkpoint_dsn(invalid_dsn)
