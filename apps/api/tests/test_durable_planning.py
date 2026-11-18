@@ -121,3 +121,52 @@ def test_checkpoint_connection_normalizes_sqlalchemy_url(monkeypatch):
     with durable_planning.postgres_planning_graph("postgresql+psycopg://localhost/app"):
         pass
     assert observed == ["postgresql://localhost/app"]
+
+
+def test_checkpoint_connection_closes_when_graph_compilation_fails(monkeypatch):
+    """Failed graph compilation must not leak a PostgreSQL saver connection."""
+    events = []
+
+    class FakeSaver:
+        @staticmethod
+        @contextmanager
+        def from_conn_string(dsn):
+            events.append("open")
+            try:
+                yield object()
+            finally:
+                events.append("close")
+
+    def broken_graph(*, checkpointer):
+        raise RuntimeError("graph compilation failed")
+
+    monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
+    monkeypatch.setattr(durable_planning, "build_planning_graph", broken_graph)
+
+    with pytest.raises(RuntimeError, match="graph compilation failed"):
+        with durable_planning.postgres_planning_graph("postgresql://localhost/test"):
+            pass
+    assert events == ["open", "close"]
+
+
+def test_checkpoint_connection_closes_when_caller_fails(monkeypatch):
+    """Request failure inside the graph context must release its connection."""
+    events = []
+
+    class FakeSaver:
+        @staticmethod
+        @contextmanager
+        def from_conn_string(dsn):
+            events.append("open")
+            try:
+                yield object()
+            finally:
+                events.append("close")
+
+    monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
+    monkeypatch.setattr(durable_planning, "build_planning_graph", lambda **kwargs: object())
+
+    with pytest.raises(RuntimeError, match="request interrupted"):
+        with durable_planning.postgres_planning_graph("postgresql://localhost/test"):
+            raise RuntimeError("request interrupted")
+    assert events == ["open", "close"]
