@@ -143,9 +143,11 @@ def test_checkpoint_connection_closes_when_graph_compilation_fails(monkeypatch):
     monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
     monkeypatch.setattr(durable_planning, "build_planning_graph", broken_graph)
 
-    with pytest.raises(RuntimeError, match="graph compilation failed"):
-        with durable_planning.postgres_planning_graph("postgresql://localhost/test"):
-            pass
+    with (
+        pytest.raises(RuntimeError, match="graph compilation failed"),
+        durable_planning.postgres_planning_graph("postgresql://localhost/test"),
+    ):
+        pass
     assert events == ["open", "close"]
 
 
@@ -166,7 +168,9 @@ def test_checkpoint_connection_closes_when_caller_fails(monkeypatch):
     monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
     monkeypatch.setattr(durable_planning, "build_planning_graph", lambda **kwargs: object())
 
-    with pytest.raises(RuntimeError, match="request interrupted"):
-        with durable_planning.postgres_planning_graph("postgresql://localhost/test"):
-            raise RuntimeError("request interrupted")
+    with (
+        pytest.raises(RuntimeError, match="request interrupted"),
+        durable_planning.postgres_planning_graph("postgresql://localhost/test"),
+    ):
+        raise RuntimeError("request interrupted")
     assert events == ["open", "close"]
