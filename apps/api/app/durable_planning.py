@@ -27,6 +27,7 @@ def checkpoint_config(thread_id: UUID | str) -> dict:
         not identifier
         or identifier != identifier.strip()
         or len(identifier) > 128
+        or unicodedata.normalize("NFC", identifier) != identifier
         or any(
             char.isspace() or unicodedata.category(char) in {"Cc", "Cf", "Cs", "Cn"}
             for char in identifier
