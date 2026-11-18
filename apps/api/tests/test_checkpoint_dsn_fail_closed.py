@@ -1,6 +1,4 @@
 """Fail-closed PostgreSQL checkpoint DSN regression coverage."""
-from contextlib import contextmanager
-
 import pytest
 
 from app import durable_planning
