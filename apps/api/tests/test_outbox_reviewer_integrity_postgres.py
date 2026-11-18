@@ -69,9 +69,8 @@ def test_enqueue_rejects_corrupted_retry_budget(factory, attempt, max_attempts):
         workflow.attempt = attempt
         workflow.max_attempts = max_attempts
 
-    with factory.begin() as session:
-        with pytest.raises(WorkflowTransitionError, match="Invalid execution attempt"):
-            WorkflowOutboxRepository(session).enqueue_claimed(action_id)
+    with factory.begin() as session, pytest.raises(WorkflowTransitionError, match="Invalid execution attempt"):
+        WorkflowOutboxRepository(session).enqueue_claimed(action_id)
 
     with factory.begin() as session:
         assert session.get(WorkflowOutboxRow, action_id) is None
