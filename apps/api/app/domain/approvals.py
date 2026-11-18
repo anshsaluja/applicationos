@@ -66,6 +66,10 @@ def decide(
     if requested == ApprovalStatus.REJECTED and not (reason or "").strip():
         raise ApprovalGateError("Rejection requires a reason")
     if current.status != ApprovalStatus.PENDING:
+        # A replay must not silently accept a corrupted legacy audit record.
+        # Execution also checks this boundary, but decision writes must fail closed.
+        if not _valid_reviewer_id(current.reviewer_id) or not _valid_reason(current.reason):
+            raise ApprovalGateError("Persisted approval decision is invalid")
         if current.status == requested and current.reviewer_id == reviewer_id and (
             current.reason or None
         ) == ((reason or "").strip() or None):
