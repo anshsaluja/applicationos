@@ -65,3 +65,29 @@ def test_persisted_safe_approval_reason_still_authorizes():
         reason="Evidence reviewed",
     )
     require_approved(persisted, action_id)
+
+
+@pytest.mark.parametrize(
+    ("reviewer_id", "reason"),
+    [
+        ("reviewer-1", "Hidden\\u200btext"),
+        ("reviewer-1", "A" * 2001),
+        ("reviewer\\u202e-1", "Evidence reviewed"),
+        ("reviewer 1", "Evidence reviewed"),
+    ],
+)
+def test_replay_rejects_corrupt_persisted_approval(reviewer_id, reason):
+    """A matching replay must not bless an invalid persisted audit record."""
+    persisted = ApprovalDecision(
+        action_id=uuid4(),
+        status=ApprovalStatus.APPROVED,
+        reviewer_id=reviewer_id,
+        reason=reason,
+    )
+    with pytest.raises(ApprovalGateError, match="Persisted approval decision is invalid"):
+        decide(
+            persisted,
+            ApprovalStatus.APPROVED,
+            reviewer_id="reviewer-1",
+            reason=reason,
+        )
