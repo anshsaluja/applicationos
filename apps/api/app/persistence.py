@@ -572,6 +572,13 @@ class WorkflowRepository:
             raise ValueError("Invalid workflow pagination")
         rows = (
             self.session.query(WorkflowRow)
+            # Never deserialize malformed persisted checkpoints into a public
+            # listing; filter before pagination so pages remain stable.
+            .filter(
+                WorkflowRow.max_attempts.between(1, 10),
+                WorkflowRow.attempt >= 0,
+                WorkflowRow.attempt <= WorkflowRow.max_attempts,
+            )
             .order_by(WorkflowRow.action_id)
             .offset(offset)
             .limit(limit)
