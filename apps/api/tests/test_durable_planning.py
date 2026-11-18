@@ -34,6 +34,18 @@ def test_checkpoint_config_rejects_private_use_identity(identifier):
         durable_planning.checkpoint_config(identifier)
 
 
+
+def test_checkpoint_identity_has_bounded_utf8_storage_size():
+    """Multibyte identities must respect the persisted 128-byte key budget."""
+    assert durable_planning.checkpoint_config("é" * 64) == {
+        "configurable": {"thread_id": "é" * 64}
+    }
+    with pytest.raises(ValueError, match="thread_id"):
+        durable_planning.checkpoint_config("é" * 65)
+    with pytest.raises(ValueError, match="thread_id"):
+        durable_planning.checkpoint_config("a" * 127 + "é")
+
+
 def test_checkpoint_connection_is_closed_and_setup_is_opt_in(monkeypatch):
     events = []
     saver = object()
