@@ -20,6 +20,13 @@ def test_checkpoint_config_rejects_missing_identity(identifier):
         durable_planning.checkpoint_config(identifier)
 
 
+@pytest.mark.parametrize("identifier", [None, 0, 42, False, object(), ["action"]])
+def test_checkpoint_config_rejects_non_string_identity(identifier):
+    """Do not persist arbitrary object representations as workflow identities."""
+    with pytest.raises(ValueError, match="thread_id"):
+        durable_planning.checkpoint_config(identifier)
+
+
 def test_checkpoint_connection_is_closed_and_setup_is_opt_in(monkeypatch):
     events = []
     saver = object()
