@@ -25,3 +25,14 @@ def test_uuid_checkpoint_identity_is_stable_across_restarts() -> None:
 
 def test_distinct_checkpoint_keys_remain_distinct() -> None:
     assert checkpoint_config("workflow-a") != checkpoint_config("workflow-b")
+
+
+@pytest.mark.parametrize("identifier", ["cafe\u0301", "A\u030a", "\u212b"])
+def test_noncanonical_unicode_checkpoint_identity_is_rejected(identifier: str) -> None:
+    """Visually equivalent keys must not silently create separate histories."""
+    with pytest.raises(ValueError, match="thread_id"):
+        checkpoint_config(identifier)
+
+
+def test_canonical_unicode_checkpoint_identity_is_preserved() -> None:
+    assert checkpoint_config("caf\u00e9") == {"configurable": {"thread_id": "caf\u00e9"}}
