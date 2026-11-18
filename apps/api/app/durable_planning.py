@@ -51,6 +51,8 @@ def checkpoint_dsn(database_url: str) -> str:
         raise ValueError("Invalid PostgreSQL checkpoint DSN") from exc
     if url.drivername not in ("postgresql", "postgresql+psycopg"):
         raise ValueError("PostgreSQL checkpoint DSN must use psycopg")
+    if not url.database or not url.database.strip():
+        raise ValueError("PostgreSQL checkpoint DSN must name a database")
     return url.set(drivername="postgresql").render_as_string(hide_password=False)
 
 
