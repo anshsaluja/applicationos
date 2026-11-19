@@ -99,7 +99,12 @@ def plan_with_fresh_evidence(graph, *, workflow: WorkflowState, approval: Approv
     if approval is not None and approval.action_id != workflow.action_id:
         raise ValueError("Approval action_id must match workflow action_id")
     if config is not None:
-        if not isinstance(config, dict) or not isinstance(config.get("configurable"), dict):
+        # Reject top-level LangGraph overrides (including callbacks, recursion
+        # settings and custom metadata) at this security-sensitive entrypoint.
+        # Only the validated action-thread routing configuration is accepted.
+        if not isinstance(config, dict) or set(config) != {"configurable"}:
+            raise ValueError("Fresh planning requires only checkpoint configurable routing")
+        if not isinstance(config.get("configurable"), dict):
             raise ValueError("Checkpoint config must contain a configurable thread_id")
         thread_id = config["configurable"].get("thread_id")
         if thread_id != str(workflow.action_id):
