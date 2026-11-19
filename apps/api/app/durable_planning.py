@@ -9,7 +9,6 @@ import unicodedata
 from collections.abc import Iterator
 from contextlib import contextmanager
 from uuid import UUID
-from urllib.parse import urlsplit
 
 from langgraph.checkpoint.postgres import PostgresSaver
 from sqlalchemy.engine import make_url
@@ -50,7 +49,7 @@ def checkpoint_dsn(database_url: str) -> str:
         raise ValueError("PostgreSQL checkpoint DSN is required")
     # SQLAlchemy treats literal URL fragments as part of the database/query,
     # silently changing checkpoint identity or connection options.
-    if urlsplit(database_url.strip()).fragment:
+    if "#" in database_url:
         raise ValueError("PostgreSQL checkpoint DSN must not contain a URL fragment")
     try:
         url = make_url(database_url.strip())
