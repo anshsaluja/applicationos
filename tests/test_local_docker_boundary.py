@@ -59,6 +59,22 @@ class DockerEndpointSafetyTests(unittest.TestCase):
                 self.assertIn("Refusing non-local DOCKER_HOST", result.stderr)
                 self.assertEqual(calls, ["compose version"])
 
+    def test_malformed_local_docker_host_is_rejected_before_daemon_access(self):
+        for endpoint in ("unix://", "unix://relative", "npipe://", "npipe://server/pipe/docker_engine"):
+            with self.subTest(endpoint=endpoint):
+                result, calls = self.run_with_endpoint(docker_host=endpoint)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("Refusing non-local DOCKER_HOST", result.stderr)
+                self.assertEqual(calls, ["compose version"])
+
+    def test_malformed_local_context_is_rejected_before_daemon_access(self):
+        for endpoint in ("unix://", "unix://relative", "npipe://", "npipe://server/pipe/docker_engine"):
+            with self.subTest(endpoint=endpoint):
+                result, calls = self.run_with_endpoint(context_endpoint=endpoint)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("Refusing non-local Docker context endpoint", result.stderr)
+                self.assertNotIn("info", calls)
+
     def test_remote_context_is_rejected_before_daemon_access(self):
         for endpoint in ("ssh://build.example", "tcp://127.0.0.1:2375", "https://build.example"):
             with self.subTest(endpoint=endpoint):
