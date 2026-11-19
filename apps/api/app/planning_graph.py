@@ -28,7 +28,10 @@ def _route(state: PlanningState) -> dict[str, str]:
     # Recovered checkpoints are advisory, but must never suggest dispatch for
     # exhausted or internally inconsistent execution counters. The durable
     # repository remains the final transactional authorization boundary.
-    if workflow.attempt > workflow.max_attempts:
+    if (
+        not 1 <= workflow.max_attempts <= 10
+        or not 0 <= workflow.attempt <= workflow.max_attempts
+    ):
         return {"next_step": "reconcile", "explanation": "Invalid execution attempt requires reconciliation"}
     if status in {WorkflowStatus.RUNNING, WorkflowStatus.SUCCEEDED} and workflow.attempt == 0:
         return {"next_step": "reconcile", "explanation": "Missing execution claim requires reconciliation"}
