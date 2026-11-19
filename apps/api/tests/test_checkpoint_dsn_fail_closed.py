@@ -84,6 +84,8 @@ def test_checkpoint_dsn_rejects_non_string_values_before_connection(monkeypatch,
     [
         "postgresql://localhost/workflows#another-database",
         "postgresql://localhost/workflows?sslmode=require#disable",
+        "postgresql://localhost/workflows#",
+        "postgresql://localhost/workflows?sslmode=require#",
     ],
 )
 def test_checkpoint_dsn_rejects_fragments_before_connection(monkeypatch, invalid_dsn):
