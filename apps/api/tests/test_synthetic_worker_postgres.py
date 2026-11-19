@@ -214,4 +214,7 @@ def test_stale_first_intent_does_not_starve_later_approved_work(factory):
         assert session.get(WorkflowRow, stale_id).status == WorkflowStatus.RUNNING.value
         assert session.get(WorkflowOutboxRow, valid_id).status == "dispatched"
         assert session.get(WorkflowRow, valid_id).status == WorkflowStatus.SUCCEEDED.value
-    assert dispatch_one_synthetic(factory) is None
+    # The shared integration database can contain pending work from other tests.
+    # Verify only that this pair cannot be dispatched again.
+    assert dispatch_one_synthetic(factory, action_id=stale_id) is None
+    assert dispatch_one_synthetic(factory, action_id=valid_id) is None
