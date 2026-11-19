@@ -22,9 +22,8 @@ def test_invalid_checkpoint_database_never_opens_connection(monkeypatch, invalid
     monkeypatch.setattr(
         durable_planning.PostgresSaver, "from_conn_string", unexpected_connection
     )
-    with pytest.raises(ValueError, match="database"):
-        with durable_planning.postgres_planning_graph(invalid_dsn):
-            pass
+    with pytest.raises(ValueError, match="database"), durable_planning.postgres_planning_graph(invalid_dsn):
+        pass
 
 
 def test_checkpoint_dsn_keeps_escaped_password_and_database_name():
