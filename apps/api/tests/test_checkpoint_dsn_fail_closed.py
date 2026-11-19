@@ -32,3 +32,32 @@ def test_checkpoint_dsn_keeps_escaped_password_and_database_name():
     assert durable_planning.checkpoint_dsn(dsn) == (
         "postgresql://user:p%40ss%2Fword@localhost:5432/workflows?sslmode=require"
     )
+
+
+@pytest.mark.parametrize(
+    "invalid_dsn",
+    [
+        "sqlite:///tmp/checkpoints.db",
+        "mysql://localhost/workflows",
+        "postgresql+asyncpg://localhost/workflows",
+        "not-a-url",
+        "",
+        "   ",
+    ],
+)
+def test_checkpoint_dsn_rejects_unsupported_or_malformed_urls(invalid_dsn):
+    """Do not accidentally initialize checkpoints through another driver."""
+    with pytest.raises(ValueError, match="PostgreSQL|Invalid"):
+        durable_planning.checkpoint_dsn(invalid_dsn)
+
+
+def test_checkpoint_dsn_preserves_encoded_database_and_connection_options():
+    """Connection identity and TLS parameters must survive driver normalization."""
+    dsn = (
+        "postgresql+psycopg://reviewer:p%40ss@localhost:5432/"
+        "application%2Dos?sslmode=verify-full&connect_timeout=5"
+    )
+    assert durable_planning.checkpoint_dsn(dsn) == (
+        "postgresql://reviewer:p%40ss@localhost:5432/"
+        "application-os?sslmode=verify-full&connect_timeout=5"
+    )
