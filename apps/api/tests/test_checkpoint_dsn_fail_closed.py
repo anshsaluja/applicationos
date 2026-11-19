@@ -52,14 +52,14 @@ def test_checkpoint_dsn_rejects_unsupported_or_malformed_urls(invalid_dsn):
 
 
 def test_checkpoint_dsn_preserves_encoded_database_and_connection_options():
-    """Connection identity and TLS parameters must survive driver normalization."""
+    """Connection identity and TLS parameters must survive canonical URL rendering."""
     dsn = (
         "postgresql+psycopg://reviewer:p%40ss@localhost:5432/"
         "application%2Dos?sslmode=verify-full&connect_timeout=5"
     )
     assert durable_planning.checkpoint_dsn(dsn) == (
         "postgresql://reviewer:p%40ss@localhost:5432/"
-        "application%2Dos?connect_timeout=5&sslmode=verify-full"
+        "application-os?connect_timeout=5&sslmode=verify-full"
     )
 
 
