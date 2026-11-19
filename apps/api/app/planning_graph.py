@@ -25,6 +25,16 @@ def _route(state: PlanningState) -> dict[str, str]:
     workflow = state["workflow"]
     status = workflow.status
 
+    # Recovered checkpoints are advisory, but must never suggest dispatch for
+    # exhausted or internally inconsistent execution counters. The durable
+    # repository remains the final transactional authorization boundary.
+    if workflow.attempt > workflow.max_attempts:
+        return {"next_step": "reconcile", "explanation": "Invalid execution attempt requires reconciliation"}
+    if status in {WorkflowStatus.RUNNING, WorkflowStatus.SUCCEEDED} and workflow.attempt == 0:
+        return {"next_step": "reconcile", "explanation": "Missing execution claim requires reconciliation"}
+    if status == WorkflowStatus.READY and workflow.attempt >= workflow.max_attempts:
+        return {"next_step": "reconcile", "explanation": "Retry budget exhausted; do not claim execution"}
+
     if status == WorkflowStatus.SUCCEEDED:
         return {"next_step": "reconcile", "explanation": "Success requires independent durable receipt verification"}
     if status == WorkflowStatus.RUNNING:
