@@ -86,6 +86,11 @@ def plan_with_fresh_evidence(graph, *, workflow: WorkflowState, approval: Approv
         # must use the latest state rather than fork from a stale approval.
         # Namespaces other than the default are not part of this action boundary.
         configurable = config["configurable"]
+        # Do not let caller-supplied checkpoint routing fields alter isolation.
+        # Only the stable action thread and explicit default namespace are valid.
+        unexpected = set(configurable) - {"thread_id", "checkpoint_ns", "checkpoint_id"}
+        if unexpected:
+            raise ValueError("Fresh planning rejects unexpected checkpoint configuration keys")
         if "checkpoint_id" in configurable:
             raise ValueError("Fresh planning must not select a historical checkpoint_id")
         if configurable.get("checkpoint_ns", "") != "":
