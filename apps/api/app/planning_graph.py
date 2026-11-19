@@ -24,6 +24,10 @@ class PlanningState(TypedDict):
 def _route(state: PlanningState) -> dict[str, str]:
     workflow = state["workflow"]
     status = workflow.status
+    # Checkpoint payloads can outlive enum/schema migrations. Unknown statuses
+    # must never crash recovery or fall through to a dispatch recommendation.
+    if not isinstance(status, WorkflowStatus):
+        return {"next_step": "reconcile", "explanation": "Unknown workflow status requires reconciliation"}
 
     # Recovered checkpoints are advisory, but must never suggest dispatch for
     # exhausted or internally inconsistent execution counters. The durable
