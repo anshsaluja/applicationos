@@ -77,3 +77,33 @@ def test_checkpoint_dsn_rejects_non_string_values_before_connection(monkeypatch,
         durable_planning.postgres_planning_graph(invalid_dsn),
     ):
         pass
+
+
+@pytest.mark.parametrize(
+    "invalid_dsn",
+    [
+        "postgresql://localhost/workflows#another-database",
+        "postgresql://localhost/workflows?sslmode=require#disable",
+    ],
+)
+def test_checkpoint_dsn_rejects_fragments_before_connection(monkeypatch, invalid_dsn):
+    """A literal fragment must not become part of the DB name or TLS options."""
+    def unexpected_connection(dsn):
+        pytest.fail(f"Opened saver for invalid checkpoint DSN: {dsn!r}")
+
+    monkeypatch.setattr(
+        durable_planning.PostgresSaver, "from_conn_string", unexpected_connection
+    )
+    with (
+        pytest.raises(ValueError, match="fragment"),
+        durable_planning.postgres_planning_graph(invalid_dsn),
+    ):
+        pass
+
+
+def test_checkpoint_dsn_preserves_percent_encoded_hash_in_password():
+    """An escaped hash in a credential is data, not a URL fragment."""
+    dsn = "postgresql+psycopg://reviewer:p%23ss@localhost/workflows"
+    assert durable_planning.checkpoint_dsn(dsn) == (
+        "postgresql://reviewer:p%23ss@localhost/workflows"
+    )
