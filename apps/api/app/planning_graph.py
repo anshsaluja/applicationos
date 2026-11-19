@@ -72,6 +72,10 @@ def plan_with_fresh_evidence(graph, *, workflow: WorkflowState, approval: Approv
         raise TypeError("workflow must be a WorkflowState")
     if approval is not None and not isinstance(approval, ApprovalDecision):
         raise TypeError("approval must be an ApprovalDecision or None")
+    # Reject foreign approval evidence before LangGraph can persist it in this thread.
+    # The route gate also checks identity, but checkpoint contents must stay isolated.
+    if approval is not None and approval.action_id != workflow.action_id:
+        raise ValueError("Approval action_id must match workflow action_id")
     if config is not None:
         if not isinstance(config, dict) or not isinstance(config.get("configurable"), dict):
             raise ValueError("Checkpoint config must contain a configurable thread_id")
