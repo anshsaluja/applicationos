@@ -82,6 +82,14 @@ def plan_with_fresh_evidence(graph, *, workflow: WorkflowState, approval: Approv
         thread_id = config["configurable"].get("thread_id")
         if thread_id != str(workflow.action_id):
             raise ValueError("Checkpoint thread_id must match workflow action_id")
+        # A caller-provided checkpoint_id selects an older snapshot. Fresh planning
+        # must use the latest state rather than fork from a stale approval.
+        # Namespaces other than the default are not part of this action boundary.
+        configurable = config["configurable"]
+        if "checkpoint_id" in configurable:
+            raise ValueError("Fresh planning must not select a historical checkpoint_id")
+        if configurable.get("checkpoint_ns", "") != "":
+            raise ValueError("Fresh planning requires the default checkpoint namespace")
     return graph.invoke(
         {"workflow": workflow, "approval": approval, "next_step": "", "explanation": ""},
         config=config,
