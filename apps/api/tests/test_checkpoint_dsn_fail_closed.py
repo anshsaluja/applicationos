@@ -72,5 +72,8 @@ def test_checkpoint_dsn_rejects_non_string_values_before_connection(monkeypatch,
     monkeypatch.setattr(
         durable_planning.PostgresSaver, "from_conn_string", unexpected_connection
     )
-    with pytest.raises(TypeError, match="must be a string"), durable_planning.postgres_planning_graph(invalid_dsn):
+    with (
+        pytest.raises(TypeError, match="must be a string"),
+        durable_planning.postgres_planning_graph(invalid_dsn),
+    ):
         pass
