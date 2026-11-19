@@ -72,3 +72,21 @@ def test_checkpointed_plan_reconciles_success_without_receipt():
 
     assert recovered["next_step"] == "reconcile"
     assert "receipt" not in graph.get_state(config).values
+
+
+def test_checkpointed_plan_rechecks_missing_approval_after_prior_authorization():
+    """A previous approval cannot authorize a later request without approval evidence."""
+    graph = build_planning_graph(checkpointer=MemorySaver())
+    action_id = uuid4()
+    config = {"configurable": {"thread_id": str(action_id)}}
+    workflow = _workflow(action_id, WorkflowStatus.READY)
+
+    initial = _invoke(graph, config, workflow, _approval(action_id, ApprovalStatus.APPROVED))
+    assert initial["next_step"] == "claim_outbox"
+
+    recovered = _invoke(graph, config, workflow, None)
+    assert recovered["next_step"] == "request_review"
+    snapshot = graph.get_state(config).values
+    assert snapshot["next_step"] == "request_review"
+    assert snapshot["approval"] is None
+    assert "receipt" not in snapshot
