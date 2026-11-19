@@ -330,6 +330,46 @@ with post(f"/v1/workflows/{action_id}/request-review", {}) as response:
 assert repeated_review == original, "Duplicate review changed the durable checkpoint"
 print("Restart idempotency, approval and dispatch boundaries: PASS")
 PY
+# Exercise a real PostgreSQL process restart, not only an API restart.
+# A connection pool may hold stale sockets briefly; wait for the API's actual
+# database-backed readiness endpoint before asserting durable state.
+docker compose restart postgres
+python3 - <<'PY'
+import json
+import time
+import urllib.error
+import urllib.request
+
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+for attempt in range(60):
+    try:
+        with opener.open("http://127.0.0.1:8000/ready", timeout=3) as response:
+            if response.status == 200 and json.load(response) == {"status": "ready"}:
+                print("PostgreSQL restart and API database reconnection: PASS")
+                break
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        pass
+    time.sleep(2)
+else:
+    raise SystemExit("API did not recover database-backed readiness after PostgreSQL restart")
+PY
+CHECKPOINT_ID="$checkpoint_id" python3 - <<'PY'
+import json
+import os
+import urllib.request
+
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+with opener.open(
+    f"http://127.0.0.1:8000/v1/workflows/{os.environ['CHECKPOINT_ID']}",
+    timeout=10,
+) as response:
+    checkpoint = json.load(response)
+assert checkpoint["action_id"] == os.environ["CHECKPOINT_ID"]
+assert checkpoint["status"] == "awaiting_approval", (
+    "PostgreSQL restart lost or advanced an unapproved workflow"
+)
+print("Approval-gated workflow survived PostgreSQL restart: PASS")
+PY
 documents_after="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) FROM documents")"
 requirements_after="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
