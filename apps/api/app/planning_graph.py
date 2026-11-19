@@ -72,6 +72,12 @@ def plan_with_fresh_evidence(graph, *, workflow: WorkflowState, approval: Approv
         raise TypeError("workflow must be a WorkflowState")
     if approval is not None and not isinstance(approval, ApprovalDecision):
         raise TypeError("approval must be an ApprovalDecision or None")
+    if config is not None:
+        if not isinstance(config, dict) or not isinstance(config.get("configurable"), dict):
+            raise ValueError("Checkpoint config must contain a configurable thread_id")
+        thread_id = config["configurable"].get("thread_id")
+        if thread_id != str(workflow.action_id):
+            raise ValueError("Checkpoint thread_id must match workflow action_id")
     return graph.invoke(
         {"workflow": workflow, "approval": approval, "next_step": "", "explanation": ""},
         config=config,
