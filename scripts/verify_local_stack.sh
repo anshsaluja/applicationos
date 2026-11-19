@@ -15,7 +15,7 @@ fi
 # Reject remote endpoints regardless of which selector is currently active.
 # Refuse a remote Docker context: local-only is a deliberate safety boundary.
 docker_host="${DOCKER_HOST:-}"
-if [[ -n "$docker_host" && "$docker_host" != unix://* && "$docker_host" != npipe://* ]]; then
+if [[ -n "$docker_host" && "$docker_host" != unix:///* && "$docker_host" != npipe:////./pipe/* ]]; then
   echo "Refusing non-local DOCKER_HOST." >&2
   exit 2
 fi
@@ -24,7 +24,7 @@ fi
 # Docker context can point to SSH or TCP even when DOCKER_HOST is unset.
 # Inspect the effective endpoint and refuse remote execution before any writes.
 context_host="$(docker context inspect "$(docker context show)" --format '{{.Endpoints.docker.Host}}')"
-if [[ "$context_host" != unix://* && "$context_host" != npipe://* ]]; then
+if [[ "$context_host" != unix:///* && "$context_host" != npipe:////./pipe/* ]]; then
   echo "Refusing non-local Docker context endpoint." >&2
   exit 2
 fi
