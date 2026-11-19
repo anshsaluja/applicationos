@@ -376,4 +376,33 @@ requirements_after="$(docker compose exec -T postgres psql -U applicationos -d a
   "SELECT count(*) FROM requirements")"
 test "$documents_after" -eq "$documents_before"
 test "$requirements_after" -eq "$requirements_before"
+# Recheck exact document provenance after the PostgreSQL process restart.
+DOCUMENT_ID="$document_id" WORKSPACE_ID="$workspace_id" python3 - <<'PY'
+import json
+import os
+import urllib.request
+
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+base = "http://127.0.0.1:8000"
+def get(path):
+    with opener.open(base + path, timeout=10) as response:
+        assert response.status == 200
+        return json.load(response)
+
+document_id = os.environ["DOCUMENT_ID"]
+workspace_id = os.environ["WORKSPACE_ID"]
+document = get(f"/v1/documents/{document_id}")
+assert document["id"] == document_id
+assert len(document["sha256"]) == 64
+sources = get(f"/v1/documents/{document_id}/requirement-sources")
+requirements = get(f"/v1/workspaces/{workspace_id}/requirements")
+assert requirements["workspace_id"] == workspace_id
+assert sources, "PostgreSQL restart lost source links"
+assert all(source["source_document_id"] == document_id for source in sources)
+assert {str(source["requirement_id"]) for source in sources} == {
+    str(requirement["id"]) for requirement in requirements["requirements"]
+}, "PostgreSQL restart changed requirement provenance"
+assert all(not source["satisfaction_evidence"] for source in sources)
+print("PostgreSQL restart exact document provenance: PASS")
+PY
 echo "Local HTTP, ingestion, provenance, idempotency, approval-boundary persistence and API restart smoke passed (browser and signed approval/execution NOT tested)."
