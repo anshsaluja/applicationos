@@ -130,3 +130,31 @@ def test_fresh_evidence_rejects_checkpoint_routing_overrides_without_writes(extr
             graph, workflow=_workflow(action_id), approval=None, config=overridden
         )
     assert graph.get_state(base).values == original
+
+
+@pytest.mark.parametrize("override", [
+    {"metadata": {"checkpoint_id": "old"}},
+    {"callbacks": []},
+    {"recursion_limit": 1},
+    {"tags": ["foreign"]},
+    {"configurable": {"thread_id": "other"}},
+])
+def test_fresh_evidence_rejects_top_level_config_overrides_without_writes(override):
+    graph = build_planning_graph(checkpointer=MemorySaver())
+    action_id = uuid4()
+    base = {"configurable": {"thread_id": str(action_id)}}
+    approval = ApprovalDecision(
+        action_id=action_id, status=ApprovalStatus.APPROVED, reviewer_id="reviewer"
+    )
+    plan_with_fresh_evidence(graph, workflow=_workflow(action_id), approval=approval, config=base)
+    before = graph.get_state(base)
+    # Even if the override supplies another configurable mapping, the caller
+    # must not alter this action's saved approval or routing history.
+    with pytest.raises(ValueError, match="checkpoint|Checkpoint|Fresh planning"):
+        plan_with_fresh_evidence(
+            graph, workflow=_workflow(action_id), approval=None,
+            config={**base, **override},
+        )
+    after = graph.get_state(base)
+    assert after.values == before.values
+    assert after.config == before.config
