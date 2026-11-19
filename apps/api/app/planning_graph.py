@@ -32,8 +32,13 @@ def _route(state: PlanningState) -> dict[str, str]:
     # Recovered checkpoints are advisory, but must never suggest dispatch for
     # exhausted or internally inconsistent execution counters. The durable
     # repository remains the final transactional authorization boundary.
+    # model_copy(update=...) and migrated checkpoints can bypass Pydantic
+    # validation. Reject bools (which subclass int) and non-integer values
+    # before comparing counters; malformed evidence must fail closed.
     if (
-        not 1 <= workflow.max_attempts <= 10
+        type(workflow.max_attempts) is not int
+        or type(workflow.attempt) is not int
+        or not 1 <= workflow.max_attempts <= 10
         or not 0 <= workflow.attempt <= workflow.max_attempts
     ):
         return {"next_step": "reconcile", "explanation": "Invalid execution attempt requires reconciliation"}
