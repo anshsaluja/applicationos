@@ -107,3 +107,26 @@ def test_foreign_approval_rejected_without_creating_checkpoint():
             graph, workflow=_workflow(action_id), approval=foreign_approval, config=config
         )
     assert graph.get_state(config).values == {}
+
+
+@pytest.mark.parametrize("extra", [
+    {"checkpoint_map": {"parent": "foreign"}},
+    {"checkpoint_id": None},
+    {"checkpoint_ns": "other"},
+    {"custom_routing": "another-thread"},
+])
+def test_fresh_evidence_rejects_checkpoint_routing_overrides_without_writes(extra):
+    graph = build_planning_graph(checkpointer=MemorySaver())
+    action_id = uuid4()
+    base = {"configurable": {"thread_id": str(action_id)}}
+    approval = ApprovalDecision(
+        action_id=action_id, status=ApprovalStatus.APPROVED, reviewer_id="reviewer"
+    )
+    plan_with_fresh_evidence(graph, workflow=_workflow(action_id), approval=approval, config=base)
+    original = graph.get_state(base).values
+    overridden = {"configurable": {**base["configurable"], **extra}}
+    with pytest.raises(ValueError, match="checkpoint|Checkpoint|Fresh planning"):
+        plan_with_fresh_evidence(
+            graph, workflow=_workflow(action_id), approval=None, config=overridden
+        )
+    assert graph.get_state(base).values == original
