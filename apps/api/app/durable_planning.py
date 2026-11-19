@@ -43,6 +43,8 @@ def checkpoint_dsn(database_url: str) -> str:
     Reject other database dialects instead of accidentally opening a different
     database. Preserve URL-encoded credentials when rendering the connection URL.
     """
+    if not isinstance(database_url, str):
+        raise TypeError("PostgreSQL checkpoint DSN must be a string")
     if not database_url or not database_url.strip():
         raise ValueError("PostgreSQL checkpoint DSN is required")
     try:
