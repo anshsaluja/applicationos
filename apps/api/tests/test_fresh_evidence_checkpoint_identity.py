@@ -72,3 +72,38 @@ def test_fresh_evidence_clears_approval_on_same_action_replan():
         graph, workflow=_workflow(action_id), approval=None, config=config
     )["next_step"] == "request_review"
     assert graph.get_state(config).values["approval"] is None
+
+
+def test_foreign_approval_rejected_without_overwriting_existing_checkpoint():
+    graph = build_planning_graph(checkpointer=MemorySaver())
+    action_id = uuid4()
+    config = {"configurable": {"thread_id": str(action_id)}}
+    own_approval = ApprovalDecision(
+        action_id=action_id, status=ApprovalStatus.APPROVED, reviewer_id="reviewer"
+    )
+    plan_with_fresh_evidence(
+        graph, workflow=_workflow(action_id), approval=own_approval, config=config
+    )
+    original = graph.get_state(config).values
+    foreign_approval = ApprovalDecision(
+        action_id=uuid4(), status=ApprovalStatus.APPROVED, reviewer_id="other"
+    )
+    with pytest.raises(ValueError, match="Approval action_id must match"):
+        plan_with_fresh_evidence(
+            graph, workflow=_workflow(action_id), approval=foreign_approval, config=config
+        )
+    assert graph.get_state(config).values == original
+
+
+def test_foreign_approval_rejected_without_creating_checkpoint():
+    graph = build_planning_graph(checkpointer=MemorySaver())
+    action_id = uuid4()
+    config = {"configurable": {"thread_id": str(action_id)}}
+    foreign_approval = ApprovalDecision(
+        action_id=uuid4(), status=ApprovalStatus.APPROVED, reviewer_id="other"
+    )
+    with pytest.raises(ValueError, match="Approval action_id must match"):
+        plan_with_fresh_evidence(
+            graph, workflow=_workflow(action_id), approval=foreign_approval, config=config
+        )
+    assert graph.get_state(config).values == {}
