@@ -18,7 +18,7 @@ from app.planning_graph import build_planning_graph, plan_with_fresh_evidence
         (WorkflowStatus.SUCCEEDED, 0, 3, "reconcile"),
         (WorkflowStatus.RUNNING, 4, 3, "reconcile"),
         (WorkflowStatus.READY, 2, 3, "claim_outbox"),
-        (WorkflowStatus.AWAITING_APPROVAL, 3, 3, "persist_ready"),
+        (WorkflowStatus.AWAITING_APPROVAL, 3, 3, "reconcile"),
     ],
 )
 def test_recovered_attempts_are_not_mistaken_for_dispatch_authorization(
