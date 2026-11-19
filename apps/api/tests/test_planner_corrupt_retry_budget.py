@@ -29,3 +29,16 @@ def test_valid_unapproved_ready_workflow_still_requests_review() -> None:
     )
     result = _route({"workflow": workflow, "approval": None, "next_step": "", "explanation": ""})
     assert result["next_step"] == "request_review"
+
+
+@pytest.mark.parametrize(
+    "attempt,max_attempts",
+    [(True, 3), (0, True), (False, 3), (0, False), ("1", 3), (0, "3"), (None, 3), (0, None), (1.0, 3), (0, 3.0)],
+)
+def test_malformed_recovered_counter_types_fail_closed(attempt: object, max_attempts: object) -> None:
+    workflow = WorkflowState(action_id=uuid4(), idempotency_key=str(uuid4())).model_copy(
+        update={"status": WorkflowStatus.READY, "attempt": attempt, "max_attempts": max_attempts}
+    )
+    result = _route({"workflow": workflow, "approval": None, "next_step": "", "explanation": ""})
+    assert result["next_step"] == "reconcile"
+    assert "Invalid execution attempt" in result["explanation"]
