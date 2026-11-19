@@ -32,7 +32,7 @@ def _route(state: PlanningState) -> dict[str, str]:
         return {"next_step": "reconcile", "explanation": "Invalid execution attempt requires reconciliation"}
     if status in {WorkflowStatus.RUNNING, WorkflowStatus.SUCCEEDED} and workflow.attempt == 0:
         return {"next_step": "reconcile", "explanation": "Missing execution claim requires reconciliation"}
-    if status == WorkflowStatus.READY and workflow.attempt >= workflow.max_attempts:
+    if status in {WorkflowStatus.READY, WorkflowStatus.AWAITING_APPROVAL} and workflow.attempt >= workflow.max_attempts:
         return {"next_step": "reconcile", "explanation": "Retry budget exhausted; do not claim execution"}
 
     if status == WorkflowStatus.SUCCEEDED:
