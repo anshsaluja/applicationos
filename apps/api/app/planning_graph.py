@@ -59,3 +59,20 @@ def build_planning_graph(*, checkpointer=None):
     graph.add_edge(START, "plan")
     graph.add_edge("plan", END)
     return graph.compile(checkpointer=checkpointer)
+
+
+def plan_with_fresh_evidence(graph, *, workflow: WorkflowState, approval: ApprovalDecision | None, config=None):
+    """Replan from caller-supplied durable state, never inherited checkpoint approval.
+
+    LangGraph merges partial inputs with saved state. Always overwrite approval,
+    including with None after revocation or when evidence is unavailable.
+    A saved next_step is advisory and is reset before each evaluation.
+    """
+    if not isinstance(workflow, WorkflowState):
+        raise TypeError("workflow must be a WorkflowState")
+    if approval is not None and not isinstance(approval, ApprovalDecision):
+        raise TypeError("approval must be an ApprovalDecision or None")
+    return graph.invoke(
+        {"workflow": workflow, "approval": approval, "next_step": "", "explanation": ""},
+        config=config,
+    )
