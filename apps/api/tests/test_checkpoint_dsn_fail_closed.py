@@ -59,5 +59,5 @@ def test_checkpoint_dsn_preserves_encoded_database_and_connection_options():
     )
     assert durable_planning.checkpoint_dsn(dsn) == (
         "postgresql://reviewer:p%40ss@localhost:5432/"
-        "application-os?sslmode=verify-full&connect_timeout=5"
+        "application%2Dos?connect_timeout=5&sslmode=verify-full"
     )
