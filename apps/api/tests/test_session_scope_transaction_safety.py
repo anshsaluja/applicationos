@@ -47,3 +47,18 @@ def test_session_scope_rolls_back_and_closes_on_commit_failure():
     session.commit.assert_called_once_with()
     session.rollback.assert_called_once_with()
     session.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+def test_session_scope_rolls_back_and_closes_on_interruption(interruption):
+    session = Mock()
+    failure = interruption("interrupted before commit")
+
+    with pytest.raises(interruption) as caught:
+        with session_scope(lambda: session):
+            raise failure
+
+    assert caught.value is failure
+    session.commit.assert_not_called()
+    session.rollback.assert_called_once_with()
+    session.close.assert_called_once_with()
