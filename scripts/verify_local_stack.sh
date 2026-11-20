@@ -413,4 +413,60 @@ assert {str(source["requirement_id"]) for source in sources} == {
 assert all(not source["satisfaction_evidence"] for source in sources)
 print("PostgreSQL restart exact document provenance: PASS")
 PY
-echo "Local HTTP, ingestion, exact SHA-256 provenance, idempotency, approval boundary, API and PostgreSQL restart checks passed (browser and signed approval/execution NOT tested)."
+# Recheck authorization and idempotency *after the database restart*, when
+# SQLAlchemy may have replaced pooled connections. A successful GET alone
+# does not establish that the approval boundary survived reconnection.
+CHECKPOINT_ID="$checkpoint_id" python3 - <<'PY'
+import json
+import os
+import urllib.error
+import urllib.request
+from uuid import uuid4
+
+base = "http://127.0.0.1:8000"
+action_id = os.environ["CHECKPOINT_ID"]
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+def get(path):
+    with opener.open(base + path, timeout=10) as response:
+        return json.load(response)
+
+def post(path, body):
+    request = urllib.request.Request(
+        base + path,
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    return opener.open(request, timeout=10)
+
+original = get(f"/v1/workflows/{action_id}")
+assert original["status"] == "awaiting_approval"
+key = original["idempotency_key"]
+assert key, "Missing persisted idempotency key after PostgreSQL restart"
+with post("/v1/workflows", {"action_id": action_id, "idempotency_key": key}) as response:
+    assert json.load(response) == original, "PostgreSQL restart changed replay result"
+
+for path, body, expected in (
+    ("/v1/workflows", {"action_id": str(uuid4()), "idempotency_key": key}, 409),
+    (f"/v1/workflows/{action_id}/decision", {"decision": "approved", "reason": "Unauthorized database restart probe"}, 403),
+):
+    try:
+        with post(path, body):
+            pass
+    except urllib.error.HTTPError as error:
+        assert error.code == expected, f"{path}: expected {expected}, got {error.code}"
+    else:
+        raise AssertionError(f"{path} unexpectedly accepted a forbidden mutation")
+
+assert get(f"/v1/workflows/{action_id}") == original, (
+    "Rejected requests mutated the checkpoint after PostgreSQL restart"
+)
+dispatch = get(f"/v1/workflows/{action_id}/dispatch-status")
+assert dispatch["workflow_status"] == "awaiting_approval"
+assert dispatch["outbox_status"] is None
+assert dispatch["synthetic_receipt_present"] is False
+assert dispatch["reconciliation_required"] is False
+print("PostgreSQL restart idempotency and authorization boundaries: PASS")
+PY
+echo "Local HTTP, ingestion, exact SHA-256 provenance, idempotency, approval boundary, API and PostgreSQL restart authorization checks passed (browser and signed approval/execution NOT tested)."
