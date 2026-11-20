@@ -72,10 +72,13 @@ def session_scope(factory):
     try:
         yield session
         session.commit()
-    except BaseException:
-        # Also roll back on cancellation/interruption (e.g. KeyboardInterrupt),
-        # not only ordinary application errors. Never leave a transaction open.
-        session.rollback()
+    except BaseException as original_error:
+        # Preserve the primary workflow failure even if rollback itself fails.
+        # Cancellation/interruption must also attempt transaction cleanup.
+        try:
+            session.rollback()
+        except Exception as rollback_error:
+            original_error.add_note(f"Rollback also failed: {type(rollback_error).__name__}")
         raise
     finally:
         session.close()
