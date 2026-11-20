@@ -76,7 +76,16 @@ import urllib.error
 import urllib.request
 
 # Never route loopback verification traffic through ambient HTTP(S) proxies.
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects during localhost-only verification."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Local verification refused HTTP redirect")
+
+
+opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), NoRedirect
+)
 
 for attempt in range(40):
     try:
@@ -99,7 +108,16 @@ import urllib.error
 import urllib.request
 
 # Never route loopback verification traffic through ambient HTTP(S) proxies.
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects during localhost-only verification."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Local verification refused HTTP redirect")
+
+
+opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), NoRedirect
+)
 
 for attempt in range(40):
     try:
@@ -209,7 +227,16 @@ import urllib.error
 import urllib.request
 
 # Never route loopback verification traffic through ambient HTTP(S) proxies.
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects during localhost-only verification."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Local verification refused HTTP redirect")
+
+
+opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), NoRedirect
+)
 
 for _ in range(60):
     try:
@@ -230,7 +257,16 @@ import os
 import urllib.request
 
 # Never route loopback verification traffic through ambient HTTP(S) proxies.
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects during localhost-only verification."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Local verification refused HTTP redirect")
+
+
+opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), NoRedirect
+)
 
 action_id = os.environ["CHECKPOINT_ID"]
 with opener.open(
@@ -249,7 +285,16 @@ import os
 import urllib.request
 
 # Never route loopback verification traffic through ambient HTTP(S) proxies.
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects during localhost-only verification."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Local verification refused HTTP redirect")
+
+
+opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), NoRedirect
+)
 
 base = "http://127.0.0.1:8000"
 document_id = os.environ["DOCUMENT_ID"]
@@ -291,7 +336,16 @@ import urllib.error
 import urllib.request
 
 # Never route loopback verification traffic through ambient HTTP(S) proxies.
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects during localhost-only verification."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Local verification refused HTTP redirect")
+
+
+opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), NoRedirect
+)
 from uuid import uuid4
 
 base = "http://127.0.0.1:8000"
@@ -368,9 +422,16 @@ import urllib.error
 import urllib.request
 
 # Never route loopback verification traffic through ambient HTTP(S) proxies.
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects during localhost-only verification."""
 
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Local verification refused HTTP redirect")
+
+
+opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), NoRedirect
+)
 for attempt in range(60):
     try:
         with opener.open("http://127.0.0.1:8000/ready", timeout=3) as response:
@@ -389,9 +450,16 @@ import os
 import urllib.request
 
 # Never route loopback verification traffic through ambient HTTP(S) proxies.
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects during localhost-only verification."""
 
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Local verification refused HTTP redirect")
+
+
+opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), NoRedirect
+)
 with opener.open(
     f"http://127.0.0.1:8000/v1/workflows/{os.environ['CHECKPOINT_ID']}",
     timeout=10,
@@ -416,9 +484,16 @@ import os
 import urllib.request
 
 # Never route loopback verification traffic through ambient HTTP(S) proxies.
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects during localhost-only verification."""
 
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Local verification refused HTTP redirect")
+
+
+opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), NoRedirect
+)
 base = "http://127.0.0.1:8000"
 def get(path):
     with opener.open(base + path, timeout=10) as response:
@@ -451,12 +526,30 @@ import urllib.error
 import urllib.request
 
 # Never route loopback verification traffic through ambient HTTP(S) proxies.
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects during localhost-only verification."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Local verification refused HTTP redirect")
+
+
+opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), NoRedirect
+)
 from uuid import uuid4
 
 base = "http://127.0.0.1:8000"
 action_id = os.environ["CHECKPOINT_ID"]
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects during localhost-only verification."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("Local verification refused HTTP redirect")
+
+
+opener = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), NoRedirect
+)
 
 def get(path):
     with opener.open(base + path, timeout=10) as response:
