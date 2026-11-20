@@ -31,9 +31,8 @@ class FakeSession:
 def test_workflow_failure_survives_failed_close():
     session = FakeSession(close_error=OSError("close failed"))
     original = ValueError("workflow failed")
-    with pytest.raises(ValueError) as caught:
-        with session_scope(lambda: session):
-            raise original
+    with pytest.raises(ValueError) as caught, session_scope(lambda: session):
+        raise original
     assert caught.value is original
     assert session.calls == ["rollback", "close"]
     assert any("Session close also failed: OSError" in note for note in original.__notes__)
@@ -46,9 +45,8 @@ def test_commit_failure_survives_rollback_and_close_failures():
         rollback_error=OSError("rollback failed"),
         close_error=OSError("close failed"),
     )
-    with pytest.raises(RuntimeError) as caught:
-        with session_scope(lambda: session):
-            pass
+    with pytest.raises(RuntimeError) as caught, session_scope(lambda: session):
+        pass
     assert caught.value is original
     assert session.calls == ["commit", "rollback", "close"]
     assert any("Rollback also failed: OSError" in note for note in original.__notes__)
@@ -66,9 +64,8 @@ def test_close_failure_after_success_is_not_suppressed():
 def test_primary_failure_survives_cleanup_interruption(cleanup_error):
     original = ValueError("workflow failed")
     session = FakeSession(rollback_error=cleanup_error, close_error=cleanup_error)
-    with pytest.raises(ValueError) as caught:
-        with session_scope(lambda: session):
-            raise original
+    with pytest.raises(ValueError) as caught, session_scope(lambda: session):
+        raise original
     assert caught.value is original
     assert session.calls == ["rollback", "close"]
     assert any("Rollback also failed:" in note for note in original.__notes__)
@@ -78,8 +75,7 @@ def test_primary_failure_survives_cleanup_interruption(cleanup_error):
 @pytest.mark.parametrize("cleanup_error", [KeyboardInterrupt("close interrupted"), SystemExit("close exited")])
 def test_successful_commit_surfaces_close_interruption(cleanup_error):
     session = FakeSession(close_error=cleanup_error)
-    with pytest.raises(type(cleanup_error)) as caught:
-        with session_scope(lambda: session):
-            pass
+    with pytest.raises(type(cleanup_error)) as caught, session_scope(lambda: session):
+        pass
     assert caught.value is cleanup_error
     assert session.calls == ["commit", "close"]
