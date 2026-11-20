@@ -57,9 +57,8 @@ def test_commit_failure_survives_rollback_and_close_failures():
 
 def test_close_failure_after_success_is_not_suppressed():
     session = FakeSession(close_error=OSError("close failed"))
-    with pytest.raises(OSError, match="close failed"):
-        with session_scope(lambda: session):
-            pass
+    with pytest.raises(OSError, match="close failed"), session_scope(lambda: session):
+        pass
     assert session.calls == ["commit", "close"]
 
 
