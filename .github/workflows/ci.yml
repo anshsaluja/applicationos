@@ -294,6 +294,19 @@ jobs:
           set -Eeuo pipefail
           docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
             "SELECT extname FROM pg_extension WHERE extname = 'vector'" | grep -qx vector
+          # Verify vector arithmetic in the actual Compose database, not merely
+          # that the extension is listed in pg_extension.
+          distance=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+            "SELECT '[1,0,0]'::vector(3) <-> '[0,1,0]'::vector(3)")
+          python3 - "$distance" <<'PY'
+          import math
+          import sys
+
+          distance = float(sys.argv[1])
+          assert math.isfinite(distance) and abs(distance - math.sqrt(2)) < 1e-5, (
+              f"Compose pgvector distance operator returned {distance!r}"
+          )
+          PY
           docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
             "SELECT count(*) > 0 FROM documents" | grep -qx t
       - name: Verify API restart preserves PostgreSQL-backed workflows
