@@ -72,7 +72,7 @@ def session_scope(factory):
     try:
         yield session
         session.commit()
-    except BaseException as original_error:
+    except BaseException as original_error:  # noqa: BLE001 - rollback on cancellation
         # Preserve the primary workflow failure even if rollback itself fails.
         # Cancellation/interruption must also attempt transaction cleanup.
         try:
