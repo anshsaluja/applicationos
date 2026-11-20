@@ -77,7 +77,7 @@ def session_scope(factory):
         # Cancellation/interruption must also attempt transaction cleanup.
         try:
             session.rollback()
-        except Exception as rollback_error:
+        except BaseException as rollback_error:
             original_error.add_note(f"Rollback also failed: {type(rollback_error).__name__}")
         raise
     finally:
@@ -88,7 +88,7 @@ def session_scope(factory):
         active_error = sys.exception()
         try:
             session.close()
-        except Exception as close_error:
+        except BaseException as close_error:
             if active_error is None:
                 raise
             active_error.add_note(f"Session close also failed: {type(close_error).__name__}")
