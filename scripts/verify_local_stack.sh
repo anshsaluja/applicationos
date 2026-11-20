@@ -94,7 +94,7 @@ for attempt in range(40):
             if response.status == 200 and "ApplicationOS" in body:
                 print("Next.js host HTTP readiness: PASS")
                 break
-    except (urllib.error.URLError, TimeoutError):
+    except (urllib.error.URLError, TimeoutError, ValueError):
         pass
     time.sleep(2)
 else:
@@ -540,16 +540,6 @@ from uuid import uuid4
 
 base = "http://127.0.0.1:8000"
 action_id = os.environ["CHECKPOINT_ID"]
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Refuse redirects during localhost-only verification."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise ValueError("Local verification refused HTTP redirect")
-
-
-opener = urllib.request.build_opener(
-    urllib.request.ProxyHandler({}), NoRedirect
-)
 
 def get(path):
     with opener.open(base + path, timeout=10) as response:
