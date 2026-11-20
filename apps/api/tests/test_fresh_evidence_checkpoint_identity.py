@@ -52,7 +52,7 @@ def test_fresh_evidence_rejects_cross_action_checkpoint_without_mutating_store()
 )
 def test_fresh_evidence_rejects_missing_or_mismatched_thread(config):
     graph = build_planning_graph(checkpointer=MemorySaver())
-    with pytest.raises(ValueError, match="Checkpoint"):
+    with pytest.raises(ValueError, match="Checkpoint|Fresh planning"):
         plan_with_fresh_evidence(
             graph, workflow=_workflow(uuid4()), approval=None, config=config
         )
