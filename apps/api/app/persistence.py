@@ -81,7 +81,17 @@ def session_scope(factory):
             original_error.add_note(f"Rollback also failed: {type(rollback_error).__name__}")
         raise
     finally:
-        session.close()
+        # Cleanup failures must not replace the original transaction failure.
+        # On an otherwise successful transaction, a close failure still surfaces.
+        import sys
+
+        active_error = sys.exception()
+        try:
+            session.close()
+        except Exception as close_error:
+            if active_error is None:
+                raise
+            active_error.add_note(f"Session close also failed: {type(close_error).__name__}")
 
 
 class DocumentRepository:
