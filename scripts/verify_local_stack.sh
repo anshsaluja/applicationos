@@ -75,9 +75,12 @@ import time
 import urllib.error
 import urllib.request
 
+# Never route loopback verification traffic through ambient HTTP(S) proxies.
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 for attempt in range(40):
     try:
-        with urllib.request.urlopen("http://127.0.0.1:3000", timeout=3) as response:
+        with opener.open("http://127.0.0.1:3000", timeout=3) as response:
             body = response.read(256_000).decode("utf-8", errors="replace")
             if response.status == 200 and "ApplicationOS" in body:
                 print("Next.js host HTTP readiness: PASS")
@@ -95,9 +98,12 @@ import time
 import urllib.error
 import urllib.request
 
+# Never route loopback verification traffic through ambient HTTP(S) proxies.
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 for attempt in range(40):
     try:
-        with urllib.request.urlopen("http://127.0.0.1:8000/ready", timeout=3) as response:
+        with opener.open("http://127.0.0.1:8000/ready", timeout=3) as response:
             if response.status == 200 and json.load(response) == {"status": "ready"}:
                 print("FastAPI PostgreSQL readiness: PASS")
                 break
@@ -202,9 +208,12 @@ import time
 import urllib.error
 import urllib.request
 
+# Never route loopback verification traffic through ambient HTTP(S) proxies.
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 for _ in range(60):
     try:
-        with urllib.request.urlopen("http://127.0.0.1:8000/ready", timeout=3) as response:
+        with opener.open("http://127.0.0.1:8000/ready", timeout=3) as response:
             if response.status == 200 and json.load(response) == {"status": "ready"}:
                 print("API restart and PostgreSQL readiness: PASS")
                 break
@@ -220,8 +229,11 @@ import json
 import os
 import urllib.request
 
+# Never route loopback verification traffic through ambient HTTP(S) proxies.
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 action_id = os.environ["CHECKPOINT_ID"]
-with urllib.request.urlopen(
+with opener.open(
     f"http://127.0.0.1:8000/v1/workflows/{action_id}", timeout=10
 ) as response:
     workflow = json.load(response)
@@ -236,12 +248,15 @@ import json
 import os
 import urllib.request
 
+# Never route loopback verification traffic through ambient HTTP(S) proxies.
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 base = "http://127.0.0.1:8000"
 document_id = os.environ["DOCUMENT_ID"]
 workspace_id = os.environ["WORKSPACE_ID"]
 
 def get(path):
-    with urllib.request.urlopen(base + path, timeout=10) as response:
+    with opener.open(base + path, timeout=10) as response:
         assert response.status == 200
         return json.load(response)
 
@@ -274,6 +289,9 @@ import json
 import os
 import urllib.error
 import urllib.request
+
+# Never route loopback verification traffic through ambient HTTP(S) proxies.
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 from uuid import uuid4
 
 base = "http://127.0.0.1:8000"
@@ -286,9 +304,9 @@ def post(path, body):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    return urllib.request.urlopen(request, timeout=10)
+    return opener.open(request, timeout=10)
 
-with urllib.request.urlopen(base + f"/v1/workflows/{action_id}", timeout=10) as response:
+with opener.open(base + f"/v1/workflows/{action_id}", timeout=10) as response:
     original = json.load(response)
 key = original["idempotency_key"]
 assert key, "Persisted workflow has no idempotency key"
@@ -317,13 +335,13 @@ except urllib.error.HTTPError as error:
 else:
     raise AssertionError("Restarted API accepted an unauthenticated approval")
 
-with urllib.request.urlopen(base + f"/v1/workflows/{action_id}", timeout=10) as response:
+with opener.open(base + f"/v1/workflows/{action_id}", timeout=10) as response:
     final = json.load(response)
 assert final == original, "Rejected operations mutated awaiting-approval checkpoint"
 
 # A read-only reconciliation check must not invent a dispatched effect or
 # synthetic receipt for a workflow that has never been approved.
-with urllib.request.urlopen(base + f"/v1/workflows/{action_id}/dispatch-status", timeout=10) as response:
+with opener.open(base + f"/v1/workflows/{action_id}/dispatch-status", timeout=10) as response:
     dispatch = json.load(response)
 assert dispatch["action_id"] == action_id
 assert dispatch["workflow_status"] == "awaiting_approval"
@@ -349,6 +367,9 @@ import time
 import urllib.error
 import urllib.request
 
+# Never route loopback verification traffic through ambient HTTP(S) proxies.
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 for attempt in range(60):
     try:
@@ -366,6 +387,9 @@ CHECKPOINT_ID="$checkpoint_id" python3 - <<'PY'
 import json
 import os
 import urllib.request
+
+# Never route loopback verification traffic through ambient HTTP(S) proxies.
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 with opener.open(
@@ -390,6 +414,9 @@ DOCUMENT_ID="$document_id" WORKSPACE_ID="$workspace_id" EXPECTED_SHA256="$expect
 import json
 import os
 import urllib.request
+
+# Never route loopback verification traffic through ambient HTTP(S) proxies.
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 base = "http://127.0.0.1:8000"
@@ -422,6 +449,9 @@ import json
 import os
 import urllib.error
 import urllib.request
+
+# Never route loopback verification traffic through ambient HTTP(S) proxies.
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 from uuid import uuid4
 
 base = "http://127.0.0.1:8000"
