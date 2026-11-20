@@ -466,7 +466,17 @@ dispatch = get(f"/v1/workflows/{action_id}/dispatch-status")
 assert dispatch["workflow_status"] == "awaiting_approval"
 assert dispatch["outbox_status"] is None
 assert dispatch["synthetic_receipt_present"] is False
+assert dispatch["synthetic_receipt_valid"] is False
 assert dispatch["reconciliation_required"] is False
+# A repeated review transition must remain a no-op after the database pool
+# reconnects; otherwise a restart could silently reset the approval gate.
+with post(f"/v1/workflows/{action_id}/request-review", {}) as response:
+    assert json.load(response) == original, (
+        "PostgreSQL restart changed checkpoint on duplicate review request"
+    )
+assert get(f"/v1/workflows/{action_id}") == original, (
+    "Duplicate review mutated the checkpoint after PostgreSQL restart"
+)
 print("PostgreSQL restart idempotency and authorization boundaries: PASS")
 PY
 echo "Local HTTP, ingestion, exact SHA-256 provenance, idempotency, approval boundary, API and PostgreSQL restart authorization checks passed (browser and signed approval/execution NOT tested)."
