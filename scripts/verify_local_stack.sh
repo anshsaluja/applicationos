@@ -5,6 +5,16 @@ set -Eeuo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# Verification must use the checked-in stack and its own project identity.
+# Ambient Compose overrides could silently start unrelated services, mount
+# developer data, or target a different project despite the safety checks below.
+for override in COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES COMPOSE_ENV_FILES; do
+  if [[ -n "${!override:-}" ]]; then
+    echo "Refusing ambient $override override during isolated verification." >&2
+    exit 2
+  fi
+done
+
 if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
   echo "Docker with Compose v2 is required." >&2
   exit 2
