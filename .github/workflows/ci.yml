@@ -213,6 +213,10 @@ jobs:
       APPLICATIONOS_REVIEWER_ID: ci-compose-reviewer
     steps:
       - uses: actions/checkout@v4
+      - name: Syntax-check local release verification script
+        run: |
+          bash -n scripts/verify_local_stack.sh
+          # Keep the release smoke script parseable even when Docker is absent.
       - name: Validate Compose configuration
         run: docker compose config --quiet
       - name: Start complete local stack
