@@ -238,7 +238,14 @@ def get(path):
 
 document = get(f"/v1/documents/{document_id}")
 assert document["id"] == document_id, "Smoke document was not restored"
-assert len(document["sha256"]) == 64, "Document digest missing after restart"
+assert document["sha256"] == __import__("hashlib").sha256(
+    b"Please provide proof of income.\
+"
+    b"Please submit a government-issued photo ID.\
+"
+    b"Please provide rental history.\
+"
+).hexdigest(), "Persisted document digest differs from uploaded synthetic bytes", "Document digest missing after restart"
 sources = get(f"/v1/documents/{document_id}/requirement-sources")
 assert sources and all(item["source_document_id"] == document_id for item in sources), (
     "Document requirement provenance was lost after restart"
@@ -393,7 +400,14 @@ document_id = os.environ["DOCUMENT_ID"]
 workspace_id = os.environ["WORKSPACE_ID"]
 document = get(f"/v1/documents/{document_id}")
 assert document["id"] == document_id
-assert len(document["sha256"]) == 64
+assert document["sha256"] == __import__("hashlib").sha256(
+    b"Please provide proof of income.\
+"
+    b"Please submit a government-issued photo ID.\
+"
+    b"Please provide rental history.\
+"
+).hexdigest(), "Persisted document digest differs from uploaded synthetic bytes"
 sources = get(f"/v1/documents/{document_id}/requirement-sources")
 requirements = get(f"/v1/workspaces/{workspace_id}/requirements")
 assert requirements["workspace_id"] == workspace_id
@@ -405,4 +419,4 @@ assert {str(source["requirement_id"]) for source in sources} == {
 assert all(not source["satisfaction_evidence"] for source in sources)
 print("PostgreSQL restart exact document provenance: PASS")
 PY
-echo "Local HTTP, ingestion, provenance, idempotency, approval-boundary persistence and API restart smoke passed (browser and signed approval/execution NOT tested)."
+echo "Local HTTP, ingestion, exact SHA-256 provenance, idempotency, approval boundary, API and PostgreSQL restart checks passed (browser and signed approval/execution NOT tested)."
