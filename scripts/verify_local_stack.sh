@@ -239,13 +239,10 @@ def get(path):
 document = get(f"/v1/documents/{document_id}")
 assert document["id"] == document_id, "Smoke document was not restored"
 assert document["sha256"] == __import__("hashlib").sha256(
-    b"Please provide proof of income.\
-"
-    b"Please submit a government-issued photo ID.\
-"
-    b"Please provide rental history.\
-"
-).hexdigest(), "Persisted document digest differs from uploaded synthetic bytes", "Document digest missing after restart"
+    b"Please provide proof of income.\n"
+    b"Please submit a government-issued photo ID.\n"
+    b"Please provide rental history.\n"
+).hexdigest(), "Persisted document digest differs from uploaded synthetic bytes"
 sources = get(f"/v1/documents/{document_id}/requirement-sources")
 assert sources and all(item["source_document_id"] == document_id for item in sources), (
     "Document requirement provenance was lost after restart"
@@ -401,12 +398,9 @@ workspace_id = os.environ["WORKSPACE_ID"]
 document = get(f"/v1/documents/{document_id}")
 assert document["id"] == document_id
 assert document["sha256"] == __import__("hashlib").sha256(
-    b"Please provide proof of income.\
-"
-    b"Please submit a government-issued photo ID.\
-"
-    b"Please provide rental history.\
-"
+    b"Please provide proof of income.\n"
+    b"Please submit a government-issued photo ID.\n"
+    b"Please provide rental history.\n"
 ).hexdigest(), "Persisted document digest differs from uploaded synthetic bytes"
 sources = get(f"/v1/documents/{document_id}/requirement-sources")
 requirements = get(f"/v1/workspaces/{workspace_id}/requirements")
