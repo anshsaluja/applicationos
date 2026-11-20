@@ -101,6 +101,24 @@ def main():
     assert len(persisted["requirements"]) == len(again["requirements"])
     stored = request("GET", "/v1/workspaces/" + persisted["workspace_id"] + "/requirements")
     assert len(stored["requirements"]) == len(persisted["requirements"])
+    # Counts alone can pass when the wrong requirements were persisted. Verify
+    # exact identity and document provenance across repeat ingestion/persistence.
+    source_ids = {str(item["requirement_id"]) for item in sources}
+    first_ids = {str(item["id"]) for item in persisted["requirements"]}
+    repeat_ids = {str(item["id"]) for item in again["requirements"]}
+    stored_ids = {str(item["id"]) for item in stored["requirements"]}
+    assert source_ids, "No source-linked requirements were persisted"
+    assert source_ids == first_ids == repeat_ids == stored_ids, (
+        "Requirement identities or document provenance changed on replay"
+    )
+    assert len(source_ids) == len(sources), "Duplicate source requirement identities"
+    assert len(first_ids) == len(persisted["requirements"]), (
+        "Duplicate persisted requirement identities"
+    )
+    for item in sources:
+        assert not item["satisfaction_evidence"], (
+            "Instruction source incorrectly treated as satisfaction evidence"
+        )
     action_id = str(uuid4())
     workflow = request("POST", "/v1/workflows", json.dumps({
         "action_id": action_id, "idempotency_key": "smoke-" + action_id
