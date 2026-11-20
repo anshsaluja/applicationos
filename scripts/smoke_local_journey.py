@@ -233,6 +233,7 @@ def main():
         boundary_result = "stopped before approval or execution"
     print(json.dumps({
         "result": "PASS", "document_id": document["id"],
+        "document_sha256": hashlib.sha256(synthetic).hexdigest(),
         "requirement_count": len(stored["requirements"]),
         "workspace_id": stored["workspace_id"], "workflow_id": action_id,
         "boundary": boundary_result
