@@ -204,7 +204,7 @@ docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERR
   "SELECT extname FROM pg_extension WHERE extname = 'vector'" | grep -qx vector
 # Check the actual pgvector distance operator, not only extension registration.
 docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
-  "SELECT abs(('[1,0,0]'::vector(3) <-> '[0,1,0]'::vector(3)) - sqrt(2.0)) < 0.00001" | grep -qx t
+  "WITH candidates(id, embedding) AS (VALUES (1, '[1,0,0]'::vector(3)), (2, '[0,1,0]'::vector(3)), (3, '[0,0,1]'::vector(3))) SELECT (SELECT id FROM candidates ORDER BY embedding <-> '[0.9,0.1,0]'::vector(3), id LIMIT 1) = 1 AND abs(('[1,0,0]'::vector(3) <-> '[0,1,0]'::vector(3)) - sqrt(2.0)) < 0.00001" | grep -qx t
 docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) > 0 FROM documents" | grep -qx t
 # A smoke pass is not sufficient if records disappear after the API restarts.
@@ -482,7 +482,7 @@ test "$documents_after" -eq "$documents_before"
 test "$requirements_after" -eq "$requirements_before"
 # PostgreSQL restart must restore working pgvector operators as well as rows.
 docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
-  "SELECT abs(('[1,0,0]'::vector(3) <-> '[0,1,0]'::vector(3)) - sqrt(2.0)) < 0.00001" | grep -qx t
+  "WITH candidates(id, embedding) AS (VALUES (1, '[1,0,0]'::vector(3)), (2, '[0,1,0]'::vector(3)), (3, '[0,0,1]'::vector(3))) SELECT (SELECT id FROM candidates ORDER BY embedding <-> '[0.9,0.1,0]'::vector(3), id LIMIT 1) = 1 AND abs(('[1,0,0]'::vector(3) <-> '[0,1,0]'::vector(3)) - sqrt(2.0)) < 0.00001" | grep -qx t
 # Recheck exact document provenance after the PostgreSQL process restart.
 DOCUMENT_ID="$document_id" WORKSPACE_ID="$workspace_id" EXPECTED_SHA256="$expected_sha256" python3 - <<'PY'
 import json
