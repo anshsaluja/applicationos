@@ -24,9 +24,8 @@ def test_session_scope_rolls_back_and_closes_on_body_failure():
     session = Mock()
     failure = RuntimeError("reject incomplete workflow")
 
-    with pytest.raises(RuntimeError, match="reject incomplete workflow") as caught:
-        with session_scope(lambda: session):
-            raise failure
+    with pytest.raises(RuntimeError, match="reject incomplete workflow") as caught, session_scope(lambda: session):
+        raise failure
 
     assert caught.value is failure
     session.commit.assert_not_called()
@@ -39,9 +38,8 @@ def test_session_scope_rolls_back_and_closes_on_commit_failure():
     failure = RuntimeError("database commit failed")
     session.commit.side_effect = failure
 
-    with pytest.raises(RuntimeError, match="database commit failed") as caught:
-        with session_scope(lambda: session):
-            pass
+    with pytest.raises(RuntimeError, match="database commit failed") as caught, session_scope(lambda: session):
+        pass
 
     assert caught.value is failure
     session.commit.assert_called_once_with()
@@ -54,9 +52,8 @@ def test_session_scope_rolls_back_and_closes_on_interruption(interruption):
     session = Mock()
     failure = interruption("interrupted before commit")
 
-    with pytest.raises(interruption) as caught:
-        with session_scope(lambda: session):
-            raise failure
+    with pytest.raises(interruption) as caught, session_scope(lambda: session):
+        raise failure
 
     assert caught.value is failure
     session.commit.assert_not_called()
