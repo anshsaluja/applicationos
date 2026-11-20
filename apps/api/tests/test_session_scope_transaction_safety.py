@@ -59,3 +59,19 @@ def test_session_scope_rolls_back_and_closes_on_interruption(interruption):
     session.commit.assert_not_called()
     session.rollback.assert_called_once_with()
     session.close.assert_called_once_with()
+
+
+def test_session_scope_does_not_commit_when_rollback_fails():
+    """Preserve the original workflow error even when database rollback fails."""
+    session = Mock()
+    session.rollback.side_effect = RuntimeError("database connection lost during rollback")
+    failure = ValueError("workflow rejected")
+
+    with pytest.raises(ValueError, match="workflow rejected") as caught, session_scope(lambda: session):
+        raise failure
+
+    assert caught.value is failure
+    assert any("Rollback also failed" in note for note in caught.value.__notes__)
+    session.commit.assert_not_called()
+    session.rollback.assert_called_once_with()
+    session.close.assert_called_once_with()
