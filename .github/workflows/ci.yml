@@ -76,6 +76,16 @@ jobs:
               with engine.begin() as connection:
                   connection.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
               Base.metadata.create_all(bind=engine)
+              # Exercise the actual pgvector distance operator against the
+              # disposable PostgreSQL service, not just extension creation.
+              # A working extension is a prerequisite for retrieval tests.
+              with engine.connect() as connection:
+                  distance = connection.exec_driver_sql(
+                      "SELECT '[1,0,0]'::vector(3) <-> '[0,1,0]'::vector(3)"
+                  ).scalar_one()
+                  assert abs(distance - 2 ** 0.5) < 1e-5, (
+                      f"pgvector distance operator returned {distance!r}"
+                  )
           finally:
               engine.dispose()
           PY
