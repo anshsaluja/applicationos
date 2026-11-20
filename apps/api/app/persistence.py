@@ -72,7 +72,9 @@ def session_scope(factory):
     try:
         yield session
         session.commit()
-    except Exception:
+    except BaseException:
+        # Also roll back on cancellation/interruption (e.g. KeyboardInterrupt),
+        # not only ordinary application errors. Never leave a transaction open.
         session.rollback()
         raise
     finally:
