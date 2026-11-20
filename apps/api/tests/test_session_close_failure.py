@@ -61,3 +61,26 @@ def test_close_failure_after_success_is_not_suppressed():
         with session_scope(lambda: session):
             pass
     assert session.calls == ["commit", "close"]
+
+
+@pytest.mark.parametrize("cleanup_error", [KeyboardInterrupt("rollback interrupted"), SystemExit("rollback exited")])
+def test_primary_failure_survives_cleanup_interruption(cleanup_error):
+    original = ValueError("workflow failed")
+    session = FakeSession(rollback_error=cleanup_error, close_error=cleanup_error)
+    with pytest.raises(ValueError) as caught:
+        with session_scope(lambda: session):
+            raise original
+    assert caught.value is original
+    assert session.calls == ["rollback", "close"]
+    assert any("Rollback also failed:" in note for note in original.__notes__)
+    assert any("Session close also failed:" in note for note in original.__notes__)
+
+
+@pytest.mark.parametrize("cleanup_error", [KeyboardInterrupt("close interrupted"), SystemExit("close exited")])
+def test_successful_commit_surfaces_close_interruption(cleanup_error):
+    session = FakeSession(close_error=cleanup_error)
+    with pytest.raises(type(cleanup_error)) as caught:
+        with session_scope(lambda: session):
+            pass
+    assert caught.value is cleanup_error
+    assert session.calls == ["commit", "close"]
