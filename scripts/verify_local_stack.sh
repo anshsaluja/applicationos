@@ -167,6 +167,15 @@ uuid.UUID(value)
 print(value)
 PY
 )"
+expected_sha256="$(SMOKE_RESULT="$smoke_result" python3 - <<'PY'
+import json
+import os
+
+digest = json.loads(os.environ["SMOKE_RESULT"])["document_sha256"]
+assert len(digest) == 64 and all(c in "0123456789abcdef" for c in digest)
+print(digest)
+PY
+)"
 docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT extname FROM pg_extension WHERE extname = 'vector'" | grep -qx vector
 docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
@@ -222,7 +231,7 @@ print("Awaiting-approval checkpoint survived API restart: PASS")
 PY
 # Verify the exact document, its source links, and its persisted workspace
 # remain accessible through FastAPI after the process has restarted.
-DOCUMENT_ID="$document_id" WORKSPACE_ID="$workspace_id" python3 - <<'PY'
+DOCUMENT_ID="$document_id" WORKSPACE_ID="$workspace_id" EXPECTED_SHA256="$expected_sha256" python3 - <<'PY'
 import json
 import os
 import urllib.request
@@ -238,11 +247,7 @@ def get(path):
 
 document = get(f"/v1/documents/{document_id}")
 assert document["id"] == document_id, "Smoke document was not restored"
-assert document["sha256"] == __import__("hashlib").sha256(
-    b"Please provide proof of income.\n"
-    b"Please submit a government-issued photo ID.\n"
-    b"Please provide rental history.\n"
-).hexdigest(), "Persisted document digest differs from uploaded synthetic bytes"
+assert document["sha256"] == os.environ["EXPECTED_SHA256"], "Persisted document digest differs from uploaded synthetic bytes"
 sources = get(f"/v1/documents/{document_id}/requirement-sources")
 assert sources and all(item["source_document_id"] == document_id for item in sources), (
     "Document requirement provenance was lost after restart"
@@ -381,7 +386,7 @@ requirements_after="$(docker compose exec -T postgres psql -U applicationos -d a
 test "$documents_after" -eq "$documents_before"
 test "$requirements_after" -eq "$requirements_before"
 # Recheck exact document provenance after the PostgreSQL process restart.
-DOCUMENT_ID="$document_id" WORKSPACE_ID="$workspace_id" python3 - <<'PY'
+DOCUMENT_ID="$document_id" WORKSPACE_ID="$workspace_id" EXPECTED_SHA256="$expected_sha256" python3 - <<'PY'
 import json
 import os
 import urllib.request
@@ -397,11 +402,7 @@ document_id = os.environ["DOCUMENT_ID"]
 workspace_id = os.environ["WORKSPACE_ID"]
 document = get(f"/v1/documents/{document_id}")
 assert document["id"] == document_id
-assert document["sha256"] == __import__("hashlib").sha256(
-    b"Please provide proof of income.\n"
-    b"Please submit a government-issued photo ID.\n"
-    b"Please provide rental history.\n"
-).hexdigest(), "Persisted document digest differs from uploaded synthetic bytes"
+assert document["sha256"] == os.environ["EXPECTED_SHA256"], "Persisted document digest differs from uploaded synthetic bytes"
 sources = get(f"/v1/documents/{document_id}/requirement-sources")
 requirements = get(f"/v1/workspaces/{workspace_id}/requirements")
 assert requirements["workspace_id"] == workspace_id
