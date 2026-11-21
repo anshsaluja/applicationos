@@ -283,3 +283,18 @@ def test_contracted_policy_waivers_do_not_create_false_requirements():
     ]
     assert all(item.status.value == "pending" for item in requirements)
     assert all(item.evidence == [] for item in requirements)
+
+
+def test_whereas_and_although_waivers_preserve_separate_obligations():
+    requirements = extract_requirements(
+        uuid4(),
+        "contrasting-policies.txt",
+        "A cover letter is not required, whereas a signed declaration is mandatory. "
+        "Although a photograph is not compulsory, applicants must provide proof of address.",
+    )
+    assert [item.description for item in requirements] == [
+        "a signed declaration is mandatory.",
+        "applicants must provide proof of address.",
+    ]
+    assert all(item.status.value == "pending" for item in requirements)
+    assert all(item.evidence == [] for item in requirements)
