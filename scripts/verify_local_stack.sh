@@ -8,7 +8,10 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # Verification must use the checked-in stack and its own project identity.
 # Ambient Compose overrides could silently start unrelated services, mount
 # developer data, or target a different project despite the safety checks below.
-for override in COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES COMPOSE_ENV_FILES; do
+for override in \
+  COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES COMPOSE_ENV_FILES \
+  COMPOSE_PATH_SEPARATOR COMPOSE_CONVERT_WINDOWS_PATHS COMPOSE_IGNORE_ORPHANS \
+  COMPOSE_REMOVE_ORPHANS COMPOSE_DISABLE_ENV_FILE; do
   if [[ -n "${!override:-}" ]]; then
     echo "Refusing ambient $override override during isolated verification." >&2
     exit 2
