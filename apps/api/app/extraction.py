@@ -14,7 +14,8 @@ CLAUSE = re.compile(
     r"\b(?:must|shall|required|need to|needs to)\b",
     re.IGNORECASE,
 )
-SENTENCE = re.compile(r"[^.!?\n]+(?:[.!?]|$)")
+# Decimal points inside quantities (e.g. 99.9%) are not sentence breaks.
+SENTENCE = re.compile(r"(?:[^.!?\n]|\.(?=\d))+(?:[.!?]|$)")
 # Only sentence-initial commands count as imperatives. Descriptive statements
 # such as "We provide support" or "You may upload a photo" are not obligations.
 IMPERATIVE = re.compile(
