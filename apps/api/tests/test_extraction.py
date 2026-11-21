@@ -200,3 +200,18 @@ def test_imperative_action_verbs_remain_supported():
     )
     assert len(requirements) == 4
     assert all(item.status.value == "pending" for item in requirements)
+
+
+def test_decimal_quantities_are_preserved_in_requirement_provenance():
+    requirements = extract_requirements(
+        uuid4(),
+        "service-levels.txt",
+        "The service must maintain 99.9% availability. "
+        "The system shall respond within 0.5 seconds. "
+        "This is descriptive context.",
+    )
+    assert [item.description for item in requirements] == [
+        "The service must maintain 99.9% availability.",
+        "The system shall respond within 0.5 seconds.",
+    ]
+    assert all(item.evidence == [] for item in requirements)
