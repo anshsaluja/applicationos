@@ -298,3 +298,20 @@ def test_whereas_and_although_waivers_preserve_separate_obligations():
     ]
     assert all(item.status.value == "pending" for item in requirements)
     assert all(item.evidence == [] for item in requirements)
+
+
+def test_explicit_prohibitions_are_pending_without_fabricated_evidence():
+    requirements = extract_requirements(
+        uuid4(),
+        "security-policy.txt",
+        "Sharing customer credentials is prohibited. "
+        "Uploading private keys is forbidden. "
+        "Publishing a public URL is not prohibited. "
+        "Sharing a test fixture isn’t forbidden.",
+    )
+    assert [item.description for item in requirements] == [
+        "Sharing customer credentials is prohibited.",
+        "Uploading private keys is forbidden.",
+    ]
+    assert all(item.status.value == "pending" for item in requirements)
+    assert all(item.evidence == [] for item in requirements)
