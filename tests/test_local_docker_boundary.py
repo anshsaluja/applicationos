@@ -51,6 +51,41 @@ class DockerEndpointSafetyTests(unittest.TestCase):
             )
             return result, calls.read_text().splitlines() if calls.exists() else []
 
+    def test_compose_environment_overrides_fail_before_docker_access(self):
+        # A caller must not redirect verification into a different Compose
+        # project, hide or remove orphans, or alter environment-file loading.
+        overrides = (
+            "COMPOSE_FILE", "COMPOSE_PROJECT_NAME", "COMPOSE_PROFILES",
+            "COMPOSE_ENV_FILES", "COMPOSE_PATH_SEPARATOR",
+            "COMPOSE_CONVERT_WINDOWS_PATHS", "COMPOSE_IGNORE_ORPHANS",
+            "COMPOSE_REMOVE_ORPHANS", "COMPOSE_DISABLE_ENV_FILE",
+        )
+        for name in overrides:
+            with self.subTest(override=name), tempfile.TemporaryDirectory() as temp:
+                directory = pathlib.Path(temp)
+                fake = directory / "docker"
+                log = directory / "docker-calls"
+                fake.write_text(
+                    "#!/usr/bin/env bash\\n"
+                    "echo called >> \\"$DOCKER_CALL_LOG\\"\\n"
+                )
+                fake.chmod(0o755)
+                env = os.environ.copy()
+                for key in overrides:
+                    env.pop(key, None)
+                env.update({
+                    "PATH": str(directory) + os.pathsep + env["PATH"],
+                    "DOCKER_CALL_LOG": str(log),
+                    name: "1",
+                })
+                result = subprocess.run(
+                    ["bash", str(SCRIPT)], cwd=ROOT, env=env,
+                    capture_output=True, text=True, timeout=15, check=False,
+                )
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn(f"Refusing ambient {name} override", result.stderr)
+                self.assertFalse(log.exists(), "Docker accessed before safety preflight")
+
     def test_remote_docker_host_is_rejected_before_context_or_daemon_access(self):
         for endpoint in ("ssh://build.example", "tcp://127.0.0.1:2375", "https://build.example"):
             with self.subTest(endpoint=endpoint):
