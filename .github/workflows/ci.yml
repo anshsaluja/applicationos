@@ -65,7 +65,7 @@ jobs:
         run: python -m compileall -q app tests
       - name: Lint (required)
         id: lint
-        run: ruff check . --output-format github
+        run: ruff check . --output-format concise
       - name: Prepare PostgreSQL schema
         run: |
           python - <<'PY'
