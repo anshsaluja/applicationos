@@ -42,9 +42,12 @@ COMMA_OBLIGATION = re.compile(
 
 # Split independently stated obligations joined by "and" without splitting
 # ordinary object lists such as "upload a passport and a photo".
+# Split active and passive obligations joined by "and", but never split
+# object lists such as "a passport and a signed declaration".
 INDEPENDENT_OBLIGATION = re.compile(
     r"\s+and\s+(?=(?:(?:you|applicants?|users?|reviewers?|the\s+applicant|the\s+user|the\s+reviewer)\s+)?"
-    r"(?:must|shall|need(?:s)?\s+to|ha(?:ve|s)\s+to)\b)",
+    r"(?:must|shall|need(?:s)?\s+to|ha(?:ve|s)\s+to)\b|"
+    r"[^,.;]{1,80}?\s+(?:is|are)\s+(?:required|mandatory|compulsory)\b)",
     re.IGNORECASE,
 )
 
