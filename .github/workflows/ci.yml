@@ -456,6 +456,23 @@ jobs:
             "SELECT extname FROM pg_extension WHERE extname = 'vector'" | grep -qx vector
           after=$(curl --fail --silent --show-error --max-time 15 "http://127.0.0.1:8000/v1/workflows/$action_id")
           test "$after" = "$before" || { echo "Terminal checkpoint changed after DB restart" >&2; exit 1; }
+          # Confirm the extension remains operational after the database restart,
+          # rather than merely checking that its catalog entry survived.
+          distance=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+            "SELECT '[1,0,0]'::vector(3) <-> '[0,1,0]'::vector(3)")
+          python3 - "$distance" <<'PY'
+          import math
+          import sys
+
+          actual = float(sys.argv[1])
+          assert math.isfinite(actual) and abs(actual - math.sqrt(2)) < 1e-5, (
+              f"pgvector operator failed after PostgreSQL restart: {actual!r}"
+          )
+          PY
+          # A stable terminal checkpoint is insufficient if documents or
+          # requirements were lost. Assert persisted relational records too.
+          docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+            "SELECT (SELECT count(*) FROM documents) > 0 AND (SELECT count(*) FROM requirements) > 0" | grep -qx t
           # Exercise a fresh persisted request after reconnection, not just reads.
           docker compose exec -T \
             -e APPLICATIONOS_SMOKE_REVIEW_TOKEN="$APPLICATIONOS_REVIEW_TOKEN" \
