@@ -247,3 +247,20 @@ def test_contracted_must_not_prohibitions_remain_pending_requirements():
     ]
     assert all(item.status.value == "pending" for item in requirements)
     assert all(item.evidence == [] for item in requirements)
+
+
+def test_mandatory_and_compulsory_obligations_and_waivers():
+    requirements = extract_requirements(
+        uuid4(),
+        "policy.txt",
+        "A signed disclosure is mandatory. "
+        "An identity check is compulsory. "
+        "A cover letter is not mandatory. "
+        "An extra photograph is not compulsory.",
+    )
+    assert [item.description for item in requirements] == [
+        "A signed disclosure is mandatory.",
+        "An identity check is compulsory.",
+    ]
+    assert all(item.status.value == "pending" for item in requirements)
+    assert all(item.evidence == [] for item in requirements)
