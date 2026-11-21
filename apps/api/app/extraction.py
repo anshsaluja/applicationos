@@ -11,7 +11,7 @@ from uuid import UUID, uuid5
 from .domain.models import Evidence, Requirement
 
 CLAUSE = re.compile(
-    r"\b(?:must|shall|required|need to|needs to)\b",
+    r"\b(?:mustn[’\x27]t|must|shall|required|need to|needs to)\b",
     re.IGNORECASE,
 )
 # Decimal points inside quantities (e.g. 99.9%) are not sentence breaks.
