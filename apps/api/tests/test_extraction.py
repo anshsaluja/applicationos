@@ -315,3 +315,22 @@ def test_explicit_prohibitions_are_pending_without_fabricated_evidence():
     ]
     assert all(item.status.value == "pending" for item in requirements)
     assert all(item.evidence == [] for item in requirements)
+
+
+def test_bulleted_imperatives_are_pending_and_retain_exact_source_excerpt():
+    requirements = extract_requirements(
+        uuid4(),
+        "checklist.txt",
+        "- Upload a photo ID.\n"
+        "* Submit a signed form.\n"
+        "• Please provide proof of address.\n"
+        "- You may upload an optional portrait.\n"
+        "This is informational context.",
+    )
+    assert [item.description for item in requirements] == [
+        "- Upload a photo ID.",
+        "* Submit a signed form.",
+        "• Please provide proof of address.",
+    ]
+    assert all(item.status.value == "pending" for item in requirements)
+    assert all(item.evidence == [] for item in requirements)
