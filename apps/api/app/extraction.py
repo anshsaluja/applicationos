@@ -35,14 +35,14 @@ CLAUSE_SEPARATOR = re.compile(r"\s*;\s*")
 # ordinary object lists such as "upload a passport and a photo".
 INDEPENDENT_OBLIGATION = re.compile(
     r"\s+and\s+(?=(?:(?:you|applicants?|users?|the\s+applicant|the\s+user)\s+)?"
-    r"(?:must|shall|need(?:s)?\s+to)\b)",
+    r"(?:must|shall|need(?:s)?\s+to|ha(?:ve|s)\s+to)\b)",
     re.IGNORECASE,
 )
 
 WAIVER = re.compile(
     r"\b(?:not\s+required(?:\s+to)?|not\s+(?:mandatory|compulsory|prohibited|forbidden)|not\s+necessary(?:\s+to)?|"
     r"(?:do|does)\s+not\s+need\s+to|(?:don[’\x27]t|doesn[’\x27]t)\s+need\s+to|"
-    r"no\s+need\s+to|need\s+not|(?:isn[’\x27]t|aren[’\x27]t|wasn[’\x27]t|weren[’\x27]t)\s+(?:required|mandatory|compulsory|necessary|prohibited|forbidden))\b",
+    r"no\s+need\s+to|need\s+not|(?:do|does)\s+not\s+have\s+to|(?:don[’\x27]t|doesn[’\x27]t)\s+have\s+to|(?:isn[’\x27]t|aren[’\x27]t|wasn[’\x27]t|weren[’\x27]t)\s+(?:required|mandatory|compulsory|necessary|prohibited|forbidden))\b",
     re.IGNORECASE,
 )
 
