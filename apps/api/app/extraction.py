@@ -19,7 +19,7 @@ SENTENCE = re.compile(r"(?:[^.!?\n]|\.(?=\d))+(?:[.!?]|$)")
 # Only sentence-initial commands count as imperatives. Descriptive statements
 # such as "We provide support" or "You may upload a photo" are not obligations.
 IMPERATIVE = re.compile(
-    r"^(?:[-*•]\s*)?(?:please\s+)?(?:provide|submit|upload|include)\b",
+    r"^(?:(?:[-*•]|[0-9]{1,3}[.)])\s+)?(?:please\s+)?(?:provide|submit|upload|include)\b",
     re.IGNORECASE,
 )
 # Split contrasting instructions so a waiver cannot mask a separate obligation.
