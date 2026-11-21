@@ -353,3 +353,33 @@ def test_numbered_checklist_imperatives_preserve_provenance_and_ignore_optional_
     ]
     assert [item.id for item in first] == [item.id for item in second]
     assert all(item.status.value == "pending" and not item.evidence for item in first)
+
+
+def test_have_to_obligations_and_contracted_waivers_remain_distinct():
+    source = uuid4()
+    text = (
+        "Applicants have to provide proof of address. "
+        "The reviewer has to verify the signed consent form. "
+        "You don't have to upload a passport, but you must provide a photo ID. "
+        "A guest does not have to submit a second reference. "
+        "You do not have to include an optional biography."
+    )
+    first = extract_requirements(source, "obligations.txt", text)
+    second = extract_requirements(source, "renamed.txt", text)
+    assert [item.description for item in first] == [
+        "Applicants have to provide proof of address.",
+        "The reviewer has to verify the signed consent form.",
+        "you must provide a photo ID.",
+    ]
+    assert [item.id for item in first] == [item.id for item in second]
+    assert all(item.status.value == "pending" and item.evidence == [] for item in first)
+
+
+def test_have_to_waiver_does_not_hide_conjoined_obligation():
+    requirements = extract_requirements(
+        uuid4(), "conjunction.txt",
+        "You do not have to upload a passport and must provide proof of address.",
+    )
+    assert [item.description for item in requirements] == [
+        "must provide proof of address."
+    ]
