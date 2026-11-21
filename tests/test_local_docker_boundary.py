@@ -65,10 +65,7 @@ class DockerEndpointSafetyTests(unittest.TestCase):
                 directory = pathlib.Path(temp)
                 fake = directory / "docker"
                 log = directory / "docker-calls"
-                fake.write_text(
-                    "#!/usr/bin/env bash\\n"
-                    "echo called >> \\"$DOCKER_CALL_LOG\\"\\n"
-                )
+                fake.write_text("#!/usr/bin/env bash\n" "touch \"$DOCKER_CALL_LOG\"\n")
                 fake.chmod(0o755)
                 env = os.environ.copy()
                 for key in overrides:
