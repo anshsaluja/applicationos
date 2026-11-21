@@ -36,7 +36,7 @@ CLAUSE_SEPARATOR = re.compile(r"\s*;\s*")
 COMMA_OBLIGATION = re.compile(
     r",\\s+(?=(?:(?:you|applicants?|users?|reviewers?|the\\s+applicant|the\\s+user|the\\s+reviewer|[A-Z][a-z]+)\\s+"
     r"(?:must|shall|need(?:s)?\\s+to|ha(?:ve|s)\\s+to)\\b|"
-    r"[^,.;]{1,80}?\\s+(?:is|are)\\s+(?:required|mandatory|compulsory)\\b))",
+    r"(?!and\\b|or\\b)[^,.;]{1,80}?\\s+(?:is|are)\\s+(?:required|mandatory|compulsory)\\b))",
     re.IGNORECASE,
 )
 
