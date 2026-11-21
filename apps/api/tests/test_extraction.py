@@ -290,7 +290,7 @@ def test_whereas_and_although_waivers_preserve_separate_obligations():
         uuid4(),
         "contrasting-policies.txt",
         "A cover letter is not required, whereas a signed declaration is mandatory. "
-        "Although a photograph is not compulsory, applicants must provide proof of address.",
+        "A photograph is not compulsory, although applicants must provide proof of address.",
     )
     assert [item.description for item in requirements] == [
         "a signed declaration is mandatory.",
