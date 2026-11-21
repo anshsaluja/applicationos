@@ -231,3 +231,19 @@ def test_yet_and_nevertheless_waivers_do_not_hide_obligations():
     ]
     assert all(item.status.value == "pending" for item in requirements)
     assert all(item.evidence == [] for item in requirements)
+
+
+def test_contracted_must_not_prohibitions_remain_pending_requirements():
+    requirements = extract_requirements(
+        uuid4(),
+        "prohibitions.txt",
+        "You mustn't disclose customer credentials. "
+        "Applicants mustn’t upload private keys. "
+        "A cover letter is not required.",
+    )
+    assert [item.description for item in requirements] == [
+        "You mustn't disclose customer credentials.",
+        "Applicants mustn’t upload private keys.",
+    ]
+    assert all(item.status.value == "pending" for item in requirements)
+    assert all(item.evidence == [] for item in requirements)
