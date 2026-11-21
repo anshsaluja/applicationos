@@ -334,3 +334,22 @@ def test_bulleted_imperatives_are_pending_and_retain_exact_source_excerpt():
     ]
     assert all(item.status.value == "pending" for item in requirements)
     assert all(item.evidence == [] for item in requirements)
+
+
+def test_numbered_checklist_imperatives_preserve_provenance_and_ignore_optional_items():
+    source = uuid4()
+    text = (
+        "1. Upload a photo ID.\n"
+        "2) Please submit a signed consent form.\n"
+        "3. You may provide an optional portrait.\n"
+        "4) Include proof of address."
+    )
+    first = extract_requirements(source, "numbered.txt", text)
+    second = extract_requirements(source, "renamed.txt", text)
+    assert [item.description for item in first] == [
+        "1. Upload a photo ID.",
+        "2) Please submit a signed consent form.",
+        "4) Include proof of address.",
+    ]
+    assert [item.id for item in first] == [item.id for item in second]
+    assert all(item.status.value == "pending" and not item.evidence for item in first)
