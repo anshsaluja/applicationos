@@ -11,7 +11,7 @@ from uuid import UUID, uuid5
 from .domain.models import Evidence, Requirement
 
 CLAUSE = re.compile(
-    r"\b(?:mustn[’\x27]t|must|shall|required|mandatory|compulsory|need to|needs to)\b",
+    r"\b(?:mustn[’\x27]t|must|shall|required|mandatory|compulsory|prohibited|forbidden|need to|needs to)\b",
     re.IGNORECASE,
 )
 # Decimal points inside quantities (e.g. 99.9%) are not sentence breaks.
@@ -40,9 +40,9 @@ INDEPENDENT_OBLIGATION = re.compile(
 )
 
 WAIVER = re.compile(
-    r"\b(?:not\s+required(?:\s+to)?|not\s+(?:mandatory|compulsory)|not\s+necessary(?:\s+to)?|"
+    r"\b(?:not\s+required(?:\s+to)?|not\s+(?:mandatory|compulsory|prohibited|forbidden)|not\s+necessary(?:\s+to)?|"
     r"(?:do|does)\s+not\s+need\s+to|(?:don[’\x27]t|doesn[’\x27]t)\s+need\s+to|"
-    r"no\s+need\s+to|need\s+not|(?:isn[’\x27]t|aren[’\x27]t|wasn[’\x27]t|weren[’\x27]t)\s+(?:required|mandatory|compulsory|necessary))\b",
+    r"no\s+need\s+to|need\s+not|(?:isn[’\x27]t|aren[’\x27]t|wasn[’\x27]t|weren[’\x27]t)\s+(?:required|mandatory|compulsory|necessary|prohibited|forbidden))\b",
     re.IGNORECASE,
 )
 
