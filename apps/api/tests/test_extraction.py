@@ -383,3 +383,23 @@ def test_have_to_waiver_does_not_hide_conjoined_obligation():
     assert [item.description for item in requirements] == [
         "must provide proof of address."
     ]
+
+
+
+def test_coordinated_reviewer_obligations_are_independent_and_auditable():
+    source = uuid4()
+    text = (
+        "Applicants must upload proof of address and the reviewer must verify the signature. "
+        "You do not need to provide a passport and reviewers shall record the decision. "
+        "You must upload a passport and a photograph."
+    )
+    first = extract_requirements(source, "policy.txt", text)
+    second = extract_requirements(source, "renamed.txt", text)
+    assert [item.description for item in first] == [
+        "Applicants must upload proof of address",
+        "the reviewer must verify the signature.",
+        "reviewers shall record the decision.",
+        "You must upload a passport and a photograph.",
+    ]
+    assert [item.id for item in first] == [item.id for item in second]
+    assert all(item.status.value == "pending" and item.evidence == [] for item in first)
