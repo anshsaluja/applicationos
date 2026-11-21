@@ -35,7 +35,7 @@ CLAUSE_SEPARATOR = re.compile(r"\s*;\s*")
 # its own subject and obligation modal. Do not split ordinary object lists.
 COMMA_OBLIGATION = re.compile(
     r",\s+(?=(?:you|applicants?|users?|reviewers?|the\s+applicant|the\s+user|the\s+reviewer|[A-Z][a-z]+)\s+"
-    r"(?:must|shall|need(?:s)?\s+to|ha(?:ve|s)\s+to)\b)",
+    r"(?:must|shall|need(?:s)?\s+to|ha(?:ve|s)\s+to|is\s+(?:required|mandatory|compulsory)|are\s+(?:required|mandatory|compulsory))\b)",
     re.IGNORECASE,
 )
 # Split independently stated obligations joined by "and" without splitting
