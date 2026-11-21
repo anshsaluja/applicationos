@@ -34,10 +34,12 @@ CLAUSE_SEPARATOR = re.compile(r"\s*;\s*")
 # A comma may also separate complete instructions when the next clause has
 # its own subject and obligation modal. Do not split ordinary object lists.
 COMMA_OBLIGATION = re.compile(
-    r",\s+(?=(?:you|applicants?|users?|reviewers?|the\s+applicant|the\s+user|the\s+reviewer|[A-Z][a-z]+)\s+"
-    r"(?:must|shall|need(?:s)?\s+to|ha(?:ve|s)\s+to|is\s+(?:required|mandatory|compulsory)|are\s+(?:required|mandatory|compulsory))\b)",
+    r",\\s+(?=(?:(?:you|applicants?|users?|reviewers?|the\\s+applicant|the\\s+user|the\\s+reviewer|[A-Z][a-z]+)\\s+"
+    r"(?:must|shall|need(?:s)?\\s+to|ha(?:ve|s)\\s+to)\\b|"
+    r"[^,.;]{1,80}?\\s+(?:is|are)\\s+(?:required|mandatory|compulsory)\\b))",
     re.IGNORECASE,
 )
+
 # Split independently stated obligations joined by "and" without splitting
 # ordinary object lists such as "upload a passport and a photo".
 INDEPENDENT_OBLIGATION = re.compile(
