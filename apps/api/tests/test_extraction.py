@@ -215,3 +215,19 @@ def test_decimal_quantities_are_preserved_in_requirement_provenance():
         "The system shall respond within 0.5 seconds.",
     ]
     assert all(item.evidence == [] for item in requirements)
+
+
+def test_yet_and_nevertheless_waivers_do_not_hide_obligations():
+    requirements = extract_requirements(
+        uuid4(),
+        "contrasts.txt",
+        "You do not need to submit a passport, yet you must provide proof of address. "
+        "A photograph is not required; nevertheless applicants shall include a signature. "
+        "The cover letter is optional.",
+    )
+    assert [item.description for item in requirements] == [
+        "you must provide proof of address.",
+        "applicants shall include a signature.",
+    ]
+    assert all(item.status.value == "pending" for item in requirements)
+    assert all(item.evidence == [] for item in requirements)
