@@ -264,3 +264,22 @@ def test_mandatory_and_compulsory_obligations_and_waivers():
     ]
     assert all(item.status.value == "pending" for item in requirements)
     assert all(item.evidence == [] for item in requirements)
+
+
+def test_contracted_policy_waivers_do_not_create_false_requirements():
+    requirements = extract_requirements(
+        uuid4(),
+        "contracted-waivers.txt",
+        "A cover letter isn't required. "
+        "Additional photographs aren't mandatory. "
+        "A second interview wasn't compulsory. "
+        "Previous references weren't necessary. "
+        "A signed consent form is mandatory. "
+        "A passport isn't required, but proof of address must be supplied.",
+    )
+    assert [item.description for item in requirements] == [
+        "A signed consent form is mandatory.",
+        "proof of address must be supplied.",
+    ]
+    assert all(item.status.value == "pending" for item in requirements)
+    assert all(item.evidence == [] for item in requirements)
