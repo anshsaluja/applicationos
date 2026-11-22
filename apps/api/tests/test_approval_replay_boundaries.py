@@ -72,3 +72,60 @@ def test_blank_reviewer_never_authorizes_approved_action() -> None:
     )
     with pytest.raises(ApprovalGateError, match="not been approved"):
         require_approved(forged, action_id)
+
+
+@pytest.mark.parametrize("status", [ApprovalStatus.APPROVED, ApprovalStatus.REJECTED])
+def test_serialized_terminal_replay_preserves_exact_audit_identity(
+    status: ApprovalStatus,
+) -> None:
+    """A worker restart must not create a second or altered decision."""
+    reason = "Evidence missing" if status == ApprovalStatus.REJECTED else "Verified"
+    first = decide(
+        ApprovalDecision(action_id=uuid4()),
+        status,
+        reviewer_id="reviewer-42",
+        reason=reason,
+    )
+    restored = ApprovalDecision.model_validate_json(first.model_dump_json())
+    replay = decide(restored, status, reviewer_id="reviewer-42", reason=reason)
+    assert replay == restored
+    assert replay.action_id == first.action_id
+    assert replay.reviewer_id == first.reviewer_id
+    assert replay.reason == first.reason
+
+
+@pytest.mark.parametrize("status", [ApprovalStatus.APPROVED, ApprovalStatus.REJECTED])
+def test_serialized_terminal_replay_cannot_change_outcome(
+    status: ApprovalStatus,
+) -> None:
+    reason = "Evidence missing" if status == ApprovalStatus.REJECTED else None
+    first = decide(
+        ApprovalDecision(action_id=uuid4()),
+        status,
+        reviewer_id="reviewer-42",
+        reason=reason,
+    )
+    restored = ApprovalDecision.model_validate_json(first.model_dump_json())
+    opposite = (
+        ApprovalStatus.REJECTED
+        if status == ApprovalStatus.APPROVED
+        else ApprovalStatus.APPROVED
+    )
+    with pytest.raises(ApprovalGateError, match="final"):
+        decide(
+            restored,
+            opposite,
+            reviewer_id="reviewer-42",
+            reason="Changed decision",
+        )
+
+
+def test_replayed_approval_cannot_authorize_another_action() -> None:
+    first = decide(
+        ApprovalDecision(action_id=uuid4()),
+        ApprovalStatus.APPROVED,
+        reviewer_id="reviewer-42",
+    )
+    restored = ApprovalDecision.model_validate_json(first.model_dump_json())
+    with pytest.raises(ApprovalGateError, match="No matching approval"):
+        require_approved(restored, uuid4())
