@@ -403,3 +403,23 @@ def test_coordinated_reviewer_obligations_are_independent_and_auditable():
     ]
     assert [item.id for item in first] == [item.id for item in second]
     assert all(item.status.value == "pending" and item.evidence == [] for item in first)
+
+
+def test_shared_passive_predicate_keeps_entire_document_list():
+    source = uuid4()
+    text = "A passport and proof of address are required."
+    first = extract_requirements(source, "policy.txt", text)
+    second = extract_requirements(source, "renamed.txt", text)
+    assert [item.description for item in first] == [text]
+    assert [item.id for item in first] == [item.id for item in second]
+    assert all(item.status.value == "pending" and item.evidence == [] for item in first)
+
+
+def test_independent_passive_waiver_still_preserves_mandatory_clause():
+    requirements = extract_requirements(
+        uuid4(), "policy.txt",
+        "A passport is not required and proof of address is required.",
+    )
+    assert [item.description for item in requirements] == [
+        "proof of address is required."
+    ]
