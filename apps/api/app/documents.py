@@ -26,8 +26,8 @@ async def ingest_upload(upload: UploadFile) -> IngestedDocument:
     # Multipart clients commonly append a charset parameter to text/plain.
     # Accept UTF-8 explicitly, but never silently interpret another charset.
     raw_type = upload.content_type or "application/octet-stream"
-    # Reject header control bytes before normalization can hide malformed MIME metadata.
-    if any(ord(ch) < 32 or ord(ch) == 127 for ch in raw_type):
+    # MIME headers must be printable ASCII. Reject controls and Unicode lookalikes\n    # before strip/lower normalization can hide malformed or spoofed metadata.
+    if any(ord(ch) < 32 or ord(ch) > 126 for ch in raw_type):
         raise HTTPException(status_code=415, detail="Invalid document content type")
     media_type, *parameters = raw_type.split(";")
     media_type = media_type.strip().lower()
