@@ -69,6 +69,7 @@ def decide(
         raise ApprovalGateError("A valid reviewer identity is required")
     if not _valid_reason(reason):
         raise ApprovalGateError("Invalid approval reason")
+    normalized_reason = (reason or "").strip() or None
     if requested == ApprovalStatus.PENDING:
         raise ApprovalGateError("Cannot transition back to pending")
     if requested == ApprovalStatus.REJECTED and not (reason or "").strip():
@@ -76,14 +77,14 @@ def decide(
     if current.status != ApprovalStatus.PENDING:
         if current.status == requested and current.reviewer_id == reviewer_id and (
             current.reason or None
-        ) == ((reason or "").strip() or None):
+        ) == normalized_reason:
             return current
         raise ApprovalGateError("Approval decision is final")
     return ApprovalDecision(
         action_id=current.action_id,
         status=requested,
         reviewer_id=reviewer_id,
-        reason=(reason or "").strip() or None,
+        reason=normalized_reason,
     )
 
 
