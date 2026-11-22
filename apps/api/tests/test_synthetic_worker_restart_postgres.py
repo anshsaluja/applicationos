@@ -132,3 +132,34 @@ def test_concurrent_synthetic_workers_dispatch_once():
         assert persisted.idempotency_key == key
 
     assert dispatch_one_synthetic(factory, action_id=action_id) is None
+
+
+def test_dispatching_one_action_does_not_consume_another_actions_outbox():
+    """Dispatching one action must not acknowledge another tenant's pending work."""
+    factory = build_session_factory()
+    first_id, first_key = prepare_approved_dispatch(factory)
+    second_id, second_key = prepare_approved_dispatch(factory)
+
+    first_receipt = dispatch_one_synthetic(factory, action_id=first_id)
+    assert first_receipt is not None
+    assert first_receipt.idempotency_key == first_key
+
+    with session_scope(factory) as session:
+        assert session.get(WorkflowOutboxRow, first_id).status == "dispatched"
+        assert session.get(WorkflowOutboxRow, second_id).status == "pending"
+        assert session.get(SyntheticReceiptRow, second_id) is None
+        assert WorkflowRepository(session).get(second_id).status == WorkflowStatus.RUNNING
+
+    second_receipt = dispatch_one_synthetic(factory, action_id=second_id)
+    assert second_receipt is not None
+    assert second_receipt.idempotency_key == second_key
+    assert second_receipt.action_id != first_receipt.action_id
+
+    with session_scope(factory) as session:
+        assert session.get(WorkflowOutboxRow, second_id).status == "dispatched"
+        assert WorkflowRepository(session).get(second_id).status == WorkflowStatus.SUCCEEDED
+        assert session.get(SyntheticReceiptRow, first_id).idempotency_key == first_key
+        assert session.get(SyntheticReceiptRow, second_id).idempotency_key == second_key
+
+    assert dispatch_one_synthetic(factory, action_id=first_id) is None
+    assert dispatch_one_synthetic(factory, action_id=second_id) is None
