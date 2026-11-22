@@ -32,9 +32,8 @@ def mocked_pdf(pages: list[MagicMock]) -> MagicMock:
 async def test_page_limit_rejects_before_extracting_any_page() -> None:
     first_page = MagicMock()
     manager = mocked_pdf([first_page] * (MAX_PDF_PAGES + 1))
-    with patch("fitz.open", return_value=manager):
-        with pytest.raises(HTTPException) as error:
-            await ingest_upload(pdf_upload())
+    with patch("fitz.open", return_value=manager), pytest.raises(HTTPException) as error:
+        await ingest_upload(pdf_upload())
     assert error.value.status_code == 413
     assert error.value.detail == "PDF exceeds 100-page limit"
     first_page.get_text.assert_not_called()
@@ -47,9 +46,8 @@ async def test_pdf_join_separator_counts_toward_extraction_limit() -> None:
     second_page = MagicMock()
     second_page.get_text.return_value = "b"
     manager = mocked_pdf([first_page, second_page])
-    with patch("fitz.open", return_value=manager):
-        with pytest.raises(HTTPException) as error:
-            await ingest_upload(pdf_upload())
+    with patch("fitz.open", return_value=manager), pytest.raises(HTTPException) as error:
+        await ingest_upload(pdf_upload())
     assert error.value.status_code == 413
     assert error.value.detail == "Extracted PDF text exceeds limit"
 
