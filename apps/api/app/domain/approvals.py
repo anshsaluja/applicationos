@@ -33,7 +33,7 @@ class ApprovalGateError(ValueError):
 def _valid_reviewer_id(value: str | None) -> bool:
     """Reject ambiguous identities even when loading persisted decisions."""
     return bool(value and len(value) <= 128 and value == value.strip() and not any(
-        char.isspace() or unicodedata.category(char) in {"Cc", "Cf", "Cs", "Cn"}
+        char.isspace() or unicodedata.category(char) in {"Cc", "Cf", "Cs", "Co", "Cn"}
         for char in value
     ))
 
@@ -43,7 +43,7 @@ def _valid_reason(value: str | None) -> bool:
     return value is None or (
         len(value) <= 2000
         and not any(
-            unicodedata.category(char) in {"Cc", "Cf", "Cs", "Cn"} and char not in ("\n", "\t")
+            unicodedata.category(char) in {"Cc", "Cf", "Cs", "Co", "Cn"} and char not in ("\n", "\t")
             for char in value
         )
     )
