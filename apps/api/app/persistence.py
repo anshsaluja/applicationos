@@ -152,7 +152,12 @@ class WorkspaceRepository:
         return requirement
 
     def list_requirements(self, workspace_id: UUID) -> list[Requirement]:
-        rows = self.session.query(RequirementRow).filter_by(workspace_id=workspace_id).all()
+        rows = (
+            self.session.query(RequirementRow)
+            .filter_by(workspace_id=workspace_id)
+            .order_by(RequirementRow.id)
+            .all()
+        )
         return [Requirement(id=r.id, title=r.title, description=r.description, status=RequirementStatus(r.status), deadline=r.deadline, evidence=[Evidence(id=e.id, source_document_id=e.source_document_id, source_label=e.source_label, excerpt=e.excerpt, page=e.page) for e in r.evidence]) for r in rows]
 
 
