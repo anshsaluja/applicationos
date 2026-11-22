@@ -197,3 +197,29 @@ async def test_reject_control_characters_in_mime_metadata(media_type):
         await ingest_upload(upload)
     assert exc.value.status_code == 415
     assert exc.value.detail == "Invalid document content type"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "media_type",
+    [
+        "text/plain\u00a0",
+        "text/plain\u200b",
+        "text/plain\uff1b charset=utf-8",
+        "text/pl\u0430in",
+        "text/plain; charset=\uff35TF-8",
+    ],
+)
+async def test_reject_non_ascii_mime_metadata_before_normalization(media_type):
+    """Unicode lookalikes and invisible spacing cannot alter declared upload type."""
+    from starlette.datastructures import Headers
+
+    upload = UploadFile(
+        filename="evidence.txt",
+        file=BytesIO(b"Submit evidence"),
+        headers=Headers({"content-type": media_type}),
+    )
+    with pytest.raises(HTTPException) as exc:
+        await ingest_upload(upload)
+    assert exc.value.status_code == 415
+    assert exc.value.detail == "Invalid document content type"
