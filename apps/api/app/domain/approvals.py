@@ -38,9 +38,10 @@ def _valid_reviewer_id(value: str | None) -> bool:
         and value == value.strip()
         and unicodedata.normalize("NFC", value) == value
         and not any(
-        char.isspace() or unicodedata.category(char) in {"Cc", "Cf", "Cs", "Co", "Cn"}
-        for char in value
-    ))
+            char.isspace() or unicodedata.category(char) in {"Cc", "Cf", "Cs", "Co", "Cn"}
+            for char in value
+        )
+    )
 
 
 def _valid_reason(value: str | None) -> bool:
