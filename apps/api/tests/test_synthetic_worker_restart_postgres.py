@@ -164,8 +164,6 @@ def test_dispatching_one_action_does_not_consume_another_actions_outbox():
     assert dispatch_one_synthetic(factory, action_id=first_id) is None
     assert dispatch_one_synthetic(factory, action_id=second_id) is None
 
-
-
 def test_quarantined_crashed_action_does_not_block_independent_dispatch():
     """Recovery must isolate an interrupted action without losing other pending work."""
     factory = build_session_factory()
@@ -198,3 +196,29 @@ def test_quarantined_crashed_action_does_not_block_independent_dispatch():
         assert WorkflowRepository(session).get(healthy_id).status == WorkflowStatus.SUCCEEDED
 
     assert dispatch_one_synthetic(factory, action_id=healthy_id) is None
+
+
+
+def test_synthetic_receipt_survives_new_session_factory_and_cannot_replay():
+    """Reconstruct the DB connection after completion to simulate worker restart."""
+    first_factory = build_session_factory()
+    action_id, key = prepare_approved_dispatch(first_factory)
+    receipt = dispatch_one_synthetic(first_factory, action_id=action_id)
+    assert receipt is not None
+    assert receipt.idempotency_key == key
+
+    # A fresh factory cannot depend on process-local workflow or receipt caches.
+    restarted_factory = build_session_factory()
+    with session_scope(restarted_factory) as session:
+        checkpoint = WorkflowRepository(session).get(action_id)
+        assert checkpoint.status == WorkflowStatus.SUCCEEDED
+        assert checkpoint.idempotency_key == key
+        assert session.get(WorkflowOutboxRow, action_id).status == "dispatched"
+        persisted = session.get(SyntheticReceiptRow, action_id)
+        assert persisted is not None
+        assert persisted.idempotency_key == key
+        assert persisted.adapter == "synthetic-noop"
+
+    assert dispatch_one_synthetic(restarted_factory, action_id=action_id) is None
+    with session_scope(restarted_factory) as session:
+        assert session.get(SyntheticReceiptRow, action_id).idempotency_key == key
