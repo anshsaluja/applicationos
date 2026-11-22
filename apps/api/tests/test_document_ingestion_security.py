@@ -180,3 +180,20 @@ async def test_embedded_utf8_bom_remains_rejected():
     with pytest.raises(HTTPException) as exc:
         await ingest_upload(upload)
     assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("media_type", ["text/plain\n", "text/plain\r", "text/plain\t", "text/plain\x00", "text/plain\x7f"])
+async def test_reject_control_characters_in_mime_metadata(media_type):
+    """Whitespace normalization must not hide malformed or unsafe MIME headers."""
+    from starlette.datastructures import Headers
+
+    upload = UploadFile(
+        filename="evidence.txt",
+        file=BytesIO(b"Submit evidence"),
+        headers=Headers({"content-type": media_type}),
+    )
+    with pytest.raises(HTTPException) as exc:
+        await ingest_upload(upload)
+    assert exc.value.status_code == 415
+    assert exc.value.detail == "Invalid document content type"
