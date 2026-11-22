@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import pytest
@@ -29,8 +30,16 @@ def factory():
     url = os.getenv("TEST_DATABASE_URL")
     if not url:
         pytest.skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
-    if not url.startswith(("postgresql+psycopg://", "postgresql://")):
-        pytest.fail("TEST_DATABASE_URL must point to PostgreSQL")
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"postgresql+psycopg", "postgresql"} or parsed.hostname not in {
+        "localhost",
+        "127.0.0.1",
+        "postgres",
+    }:
+        pytest.fail("TEST_DATABASE_URL must point to local disposable PostgreSQL")
+    configured_url = os.getenv("DATABASE_URL")
+    if configured_url and configured_url != url:
+        pytest.fail("DATABASE_URL must match TEST_DATABASE_URL for integration tests")
     engine = create_engine(url, pool_pre_ping=True)
     Base.metadata.create_all(engine)
     yield sessionmaker(bind=engine, expire_on_commit=False)
