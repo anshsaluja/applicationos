@@ -3,7 +3,6 @@
 These tests intentionally exercise ingestion without a database or network.
 """
 
-import hashlib
 from io import BytesIO
 
 import pytest
@@ -22,11 +21,12 @@ def text_upload(payload: bytes) -> UploadFile:
 
 
 @pytest.mark.asyncio
-async def test_exact_maximum_upload_size_is_accepted_with_original_digest():
+async def test_exact_maximum_upload_size_still_respects_extracted_text_limit():
     payload = b"x" * MAX_DOCUMENT_BYTES
-    document = await ingest_upload(text_upload(payload))
-    assert len(document.text) == MAX_DOCUMENT_BYTES
-    assert document.sha256 == hashlib.sha256(payload).hexdigest()
+    with pytest.raises(HTTPException) as error:
+        await ingest_upload(text_upload(payload))
+    assert error.value.status_code == 413
+    assert error.value.detail == "Extracted document text exceeds limit"
 
 
 @pytest.mark.asyncio
