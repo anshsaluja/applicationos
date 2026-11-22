@@ -78,13 +78,31 @@ def _split_comma_obligations(section: str) -> list[str]:
     return parts
 
 
+def _split_independent_obligations(section: str) -> list[str]:
+    """Keep shared-predicate document lists intact when splitting 'and'.
+
+    'A passport and proof of address are required' is one obligation, while
+    'A passport is not required and proof of address is required' contains
+    two independently stated clauses.
+    """
+    parts: list[str] = []
+    start = 0
+    for match in INDEPENDENT_OBLIGATION.finditer(section):
+        prefix = section[start:match.start()]
+        if CLAUSE.search(prefix) or WAIVER.search(prefix):
+            parts.append(prefix)
+            start = match.end()
+    parts.append(section[start:])
+    return parts
+
+
 def extract_requirements(document_id: UUID, filename: str, text: str) -> list[Requirement]:
     """Extract only explicitly stated obligations; return pending review candidates."""
     results: list[Requirement] = []
     seen: set[str] = set()
     for match in SENTENCE.finditer(text):
         sentence = match.group().strip()
-        for clause in (part for section in CLAUSE_SEPARATOR.split(sentence) for comma in _split_comma_obligations(section) for contrast in CONTRAST.split(comma) for part in INDEPENDENT_OBLIGATION.split(contrast)):
+        for clause in (part for section in CLAUSE_SEPARATOR.split(sentence) for comma in _split_comma_obligations(section) for contrast in CONTRAST.split(comma) for part in _split_independent_obligations(contrast)):
             excerpt = clause.strip()
             normalized = " ".join(excerpt.casefold().split()).rstrip(".!?")
             if not excerpt or not (CLAUSE.search(excerpt) or IMPERATIVE.search(excerpt)) or WAIVER.search(excerpt) or normalized in seen:
