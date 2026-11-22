@@ -163,3 +163,38 @@ def test_dispatching_one_action_does_not_consume_another_actions_outbox():
 
     assert dispatch_one_synthetic(factory, action_id=first_id) is None
     assert dispatch_one_synthetic(factory, action_id=second_id) is None
+
+
+
+def test_quarantined_crashed_action_does_not_block_independent_dispatch():
+    """Recovery must isolate an interrupted action without losing other pending work."""
+    factory = build_session_factory()
+    crashed_id, _ = prepare_approved_dispatch(factory)
+    healthy_id, healthy_key = prepare_approved_dispatch(factory)
+
+    with session_scope(factory) as session:
+        claimed = WorkflowOutboxRepository(session).claim_next_pending(action_id=crashed_id)
+        assert claimed is not None
+        assert claimed.status == "claimed"
+
+    with session_scope(factory) as session:
+        recovered = WorkflowRepository(session).recover_interrupted(
+            crashed_id, reason="synthetic crash isolation test"
+        )
+        assert recovered.status == WorkflowStatus.FAILED
+        assert session.get(WorkflowOutboxRow, crashed_id).status == "quarantined"
+        assert session.get(WorkflowOutboxRow, healthy_id).status == "pending"
+
+    assert dispatch_one_synthetic(factory, action_id=crashed_id) is None
+    receipt = dispatch_one_synthetic(factory, action_id=healthy_id)
+    assert receipt is not None
+    assert receipt.idempotency_key == healthy_key
+
+    with session_scope(factory) as session:
+        assert session.get(SyntheticReceiptRow, crashed_id) is None
+        assert session.get(WorkflowOutboxRow, crashed_id).status == "quarantined"
+        assert WorkflowRepository(session).get(crashed_id).status == WorkflowStatus.FAILED
+        assert session.get(SyntheticReceiptRow, healthy_id) is not None
+        assert WorkflowRepository(session).get(healthy_id).status == WorkflowStatus.SUCCEEDED
+
+    assert dispatch_one_synthetic(factory, action_id=healthy_id) is None
