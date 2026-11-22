@@ -4,8 +4,8 @@ The adapter has no external side effects. These tests require DATABASE_URL to
 point to a disposable PostgreSQL database initialized by the test/CI setup.
 """
 
-from concurrent.futures import ThreadPoolExecutor
 import os
+from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from urllib.parse import urlsplit
 from uuid import uuid4
