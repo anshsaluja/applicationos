@@ -3,13 +3,14 @@
 These tests intentionally exercise ingestion without a database or network.
 """
 
+import hashlib
 from io import BytesIO
 
 import pytest
 from fastapi import HTTPException, UploadFile
 from starlette.datastructures import Headers
 
-from app.documents import MAX_DOCUMENT_BYTES, ingest_upload
+from app.documents import MAX_DOCUMENT_BYTES, MAX_EXTRACTED_CHARACTERS, ingest_upload
 
 
 def text_upload(payload: bytes) -> UploadFile:
@@ -55,10 +56,6 @@ async def test_whitespace_only_document_is_rejected():
 
 @pytest.mark.asyncio
 async def test_exact_extracted_text_limit_is_accepted_with_byte_provenance():
-    import hashlib
-
-    from app.documents import MAX_EXTRACTED_CHARACTERS
-
     payload = b"x" * MAX_EXTRACTED_CHARACTERS
     document = await ingest_upload(text_upload(payload))
     assert len(document.text) == MAX_EXTRACTED_CHARACTERS
@@ -67,8 +64,6 @@ async def test_exact_extracted_text_limit_is_accepted_with_byte_provenance():
 
 @pytest.mark.asyncio
 async def test_one_character_above_extracted_text_limit_is_rejected():
-    from app.documents import MAX_EXTRACTED_CHARACTERS
-
     payload = b"x" * (MAX_EXTRACTED_CHARACTERS + 1)
     with pytest.raises(HTTPException) as error:
         await ingest_upload(text_upload(payload))
