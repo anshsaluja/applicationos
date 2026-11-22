@@ -129,3 +129,41 @@ def test_replayed_approval_cannot_authorize_another_action() -> None:
     restored = ApprovalDecision.model_validate_json(first.model_dump_json())
     with pytest.raises(ApprovalGateError, match="No matching approval"):
         require_approved(restored, uuid4())
+
+
+@pytest.mark.parametrize("status", [ApprovalStatus.APPROVED, ApprovalStatus.REJECTED])
+def test_replay_canonicalizes_reason_whitespace_after_restore(
+    status: ApprovalStatus,
+) -> None:
+    """Whitespace normalization must not turn a retry into a conflicting decision."""
+    action_id = uuid4()
+    first = decide(
+        ApprovalDecision(action_id=action_id),
+        status,
+        reviewer_id="reviewer-42",
+        reason="  Reviewed evidence  ",
+    )
+    assert first.reason == "Reviewed evidence"
+    restored = ApprovalDecision.model_validate_json(first.model_dump_json())
+    replay = decide(
+        restored,
+        status,
+        reviewer_id="reviewer-42",
+        reason="\tReviewed evidence\n",
+    )
+    assert replay == restored
+    assert replay.reason == "Reviewed evidence"
+
+
+def test_replayed_approval_with_blank_reason_matches_none() -> None:
+    first = decide(
+        ApprovalDecision(action_id=uuid4()),
+        ApprovalStatus.APPROVED,
+        reviewer_id="reviewer-42",
+        reason="  ",
+    )
+    restored = ApprovalDecision.model_validate_json(first.model_dump_json())
+    assert restored.reason is None
+    assert decide(
+        restored, ApprovalStatus.APPROVED, reviewer_id="reviewer-42", reason=None,
+    ) == restored
