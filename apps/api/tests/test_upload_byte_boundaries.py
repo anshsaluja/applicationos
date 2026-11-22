@@ -51,3 +51,26 @@ async def test_whitespace_only_document_is_rejected():
         await ingest_upload(text_upload(b"\t \r\n  "))
     assert error.value.status_code == 422
     assert error.value.detail == "No extractable text found"
+
+
+@pytest.mark.asyncio
+async def test_exact_extracted_text_limit_is_accepted_with_byte_provenance():
+    import hashlib
+
+    from app.documents import MAX_EXTRACTED_CHARACTERS
+
+    payload = b"x" * MAX_EXTRACTED_CHARACTERS
+    document = await ingest_upload(text_upload(payload))
+    assert len(document.text) == MAX_EXTRACTED_CHARACTERS
+    assert document.sha256 == hashlib.sha256(payload).hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_one_character_above_extracted_text_limit_is_rejected():
+    from app.documents import MAX_EXTRACTED_CHARACTERS
+
+    payload = b"x" * (MAX_EXTRACTED_CHARACTERS + 1)
+    with pytest.raises(HTTPException) as error:
+        await ingest_upload(text_upload(payload))
+    assert error.value.status_code == 413
+    assert error.value.detail == "Extracted document text exceeds limit"
