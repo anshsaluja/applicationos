@@ -62,6 +62,7 @@ def decide(
     if current.status != ApprovalStatus.PENDING and (
         not _valid_reviewer_id(current.reviewer_id)
         or not _valid_reason(current.reason)
+        or (current.reason is not None and current.reason != current.reason.strip())
         or (current.status == ApprovalStatus.REJECTED and not (current.reason or "").strip())
     ):
         raise ApprovalGateError("Persisted approval decision is invalid")
@@ -96,5 +97,6 @@ def require_approved(decision: ApprovalDecision | None, action_id: UUID) -> None
         decision.status != ApprovalStatus.APPROVED
         or not _valid_reviewer_id(decision.reviewer_id)
         or not _valid_reason(decision.reason)
+        or (decision.reason is not None and decision.reason != decision.reason.strip())
     ):
         raise ApprovalGateError("Action has not been approved")
