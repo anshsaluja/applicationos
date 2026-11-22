@@ -204,10 +204,10 @@ async def test_reject_control_characters_in_mime_metadata(media_type):
     "media_type",
     [
         "text/plain\u00a0",
-        "text/plain\u200b",
-        "text/plain\uff1b charset=utf-8",
-        "text/pl\u0430in",
-        "text/plain; charset=\uff35TF-8",
+        "text/plain\u00ad",
+        "text/plain\u00e9; charset=utf-8",
+        "text/pl\u00e4in",
+        "text/plain; charset=\u00dcTF-8",
     ],
 )
 async def test_reject_non_ascii_mime_metadata_before_normalization(media_type):
