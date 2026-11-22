@@ -5,8 +5,12 @@ point to a disposable PostgreSQL database initialized by the test/CI setup.
 """
 
 from concurrent.futures import ThreadPoolExecutor
+import os
 from threading import Barrier
+from urllib.parse import urlsplit
 from uuid import uuid4
+
+import pytest
 
 from app.domain.approvals import ApprovalStatus
 from app.domain.workflows import WorkflowState, WorkflowStatus
@@ -20,6 +24,22 @@ from app.persistence import (
     session_scope,
 )
 from app.synthetic_worker import dispatch_one_synthetic
+
+
+@pytest.fixture(autouse=True)
+def require_disposable_postgres():
+    """Never write integration fixtures to an implicit or remote database."""
+    database_url = os.getenv("DATABASE_URL", "")
+    test_url = os.getenv("TEST_DATABASE_URL", "")
+    if not test_url:
+        pytest.skip("TEST_DATABASE_URL must explicitly identify a disposable database")
+    if database_url != test_url:
+        pytest.fail("DATABASE_URL must match the explicitly configured TEST_DATABASE_URL")
+    parsed = urlsplit(test_url)
+    if not parsed.scheme.startswith("postgresql") or parsed.hostname not in {
+        "localhost", "127.0.0.1", "postgres"
+    }:
+        pytest.fail("Synthetic worker integration tests require local PostgreSQL")
 
 
 def prepare_approved_dispatch(factory):
