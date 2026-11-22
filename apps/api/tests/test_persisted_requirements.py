@@ -44,3 +44,32 @@ def test_workspace_read_returns_persisted_requirements() -> None:
 def test_workspace_read_missing_workspace() -> None:
     response = client.get("/v1/workspaces/00000000-0000-0000-0000-000000000001/requirements")
     assert response.status_code == 404
+
+
+def test_workspace_requirements_have_stable_id_order_across_reads() -> None:
+    """A workspace read must not depend on PostgreSQL's implicit row order."""
+    uploaded = client.post(
+        "/v1/documents",
+        files={
+            "file": (
+                "stable-order.txt",
+                b"You must submit a passport. You must provide a bank statement. You must submit a photo ID.",
+                "text/plain",
+            )
+        },
+    )
+    assert uploaded.status_code == 200
+    document_id = uploaded.json()["id"]
+    persisted = client.post(f"/v1/documents/{document_id}/requirements/persist")
+    assert persisted.status_code == 200
+    workspace_id = persisted.json()["workspace_id"]
+
+    first = client.get(f"/v1/workspaces/{workspace_id}/requirements")
+    second = client.get(f"/v1/workspaces/{workspace_id}/requirements")
+    assert first.status_code == second.status_code == 200
+    assert first.json() == second.json()
+    requirements = first.json()["requirements"]
+    assert len(requirements) == 3
+    ids = [item["id"] for item in requirements]
+    assert ids == sorted(ids)
+    assert len(set(ids)) == 3
