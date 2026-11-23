@@ -159,9 +159,11 @@ def test_runtime_failure_closes_saver_and_reopen_uses_same_dsn(monkeypatch):
     dsn = "postgresql+psycopg://localhost/applicationos"
     normalized = "postgresql://localhost/applicationos"
 
-    with pytest.raises(RuntimeError, match="interrupted"):
-        with durable_planning.postgres_planning_graph(dsn):
-            raise RuntimeError("interrupted")
+    with (
+        pytest.raises(RuntimeError, match="interrupted"),
+        durable_planning.postgres_planning_graph(dsn),
+    ):
+        raise RuntimeError("interrupted")
 
     with durable_planning.postgres_planning_graph(dsn) as recovered:
         assert recovered is not None
