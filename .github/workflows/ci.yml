@@ -266,8 +266,10 @@ jobs:
           before=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM workflow_checkpoints")
           test "$before" -gt 0
           checkpoint_digest_before=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
-            "SELECT md5(string_agg(row_to_json(t)::text, '|' ORDER BY action_id)) FROM (SELECT action_id, status, idempotency_key FROM workflow_checkpoints ORDER BY action_id) t")
+            "SELECT md5(string_agg(row_to_json(t)::text, '|' ORDER BY action_id)) FROM (SELECT action_id, status, idempotency_key, attempt, max_attempts, last_error FROM workflow_checkpoints ORDER BY action_id) t")
           test -n "$checkpoint_digest_before"
+          approval_digest_before=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+            "SELECT coalesce(md5(string_agg(row_to_json(t)::text, '|' ORDER BY action_id)), 'empty') FROM (SELECT action_id, status, reviewer_id, reason, decided_at FROM approval_decisions ORDER BY action_id) t")
           docker compose restart api
           for attempt in $(seq 1 60); do
             if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:8000/ready | grep -q '"ready"'; then
@@ -284,8 +286,13 @@ jobs:
           # Verify the exact persisted checkpoint records survive restart.
           # A row-count comparison alone misses silent status/identity changes.
           checkpoint_digest_after=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
-            "SELECT md5(string_agg(row_to_json(t)::text, '|' ORDER BY action_id)) FROM (SELECT action_id, status, idempotency_key FROM workflow_checkpoints ORDER BY action_id) t")
+            "SELECT md5(string_agg(row_to_json(t)::text, '|' ORDER BY action_id)) FROM (SELECT action_id, status, idempotency_key, attempt, max_attempts, last_error FROM workflow_checkpoints ORDER BY action_id) t")
           test "$checkpoint_digest_before" = "$checkpoint_digest_after"
+          # Approval decisions are persisted authorization evidence; ensure restart
+          # cannot change the reviewer, decision, reason, or decision timestamp.
+          approval_digest_after=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+            "SELECT coalesce(md5(string_agg(row_to_json(t)::text, '|' ORDER BY action_id)), 'empty') FROM (SELECT action_id, status, reviewer_id, reason, decided_at FROM approval_decisions ORDER BY action_id) t")
+          test "$approval_digest_before" = "$approval_digest_after"
           # A fresh smoke journey after restart checks live HTTP writes, idempotency,
           # document provenance, and the human approval boundary against the same DB.
           docker compose exec -T \
