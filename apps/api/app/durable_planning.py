@@ -47,12 +47,18 @@ def checkpoint_dsn(database_url: str) -> str:
         raise TypeError("PostgreSQL checkpoint DSN must be a string")
     if not database_url or not database_url.strip():
         raise ValueError("PostgreSQL checkpoint DSN is required")
+    # Connection strings are configuration identities: reject invisible characters
+    # rather than silently trimming or passing them to the PostgreSQL driver.
+    if database_url != database_url.strip() or any(
+        unicodedata.category(char) in {"Cc", "Cf", "Cs"} for char in database_url
+    ):
+        raise ValueError("PostgreSQL checkpoint DSN contains unsafe whitespace or controls")
     # SQLAlchemy treats literal URL fragments as part of the database/query,
     # silently changing checkpoint identity or connection options.
     if "#" in database_url:
         raise ValueError("PostgreSQL checkpoint DSN must not contain a URL fragment")
     try:
-        url = make_url(database_url.strip())
+        url = make_url(database_url)
     except Exception as exc:
         raise ValueError("Invalid PostgreSQL checkpoint DSN") from exc
     if url.drivername not in ("postgresql", "postgresql+psycopg"):
