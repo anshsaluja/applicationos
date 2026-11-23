@@ -94,11 +94,11 @@ def plan_with_fresh_evidence(graph, *, workflow: WorkflowState, approval: Approv
     if not isinstance(workflow, WorkflowState):
         raise TypeError("workflow must be a WorkflowState")
     if not isinstance(workflow.action_id, UUID):
-        raise ValueError("Workflow action_id must be a UUID")
+        raise TypeError("Workflow action_id must be a UUID")
     if approval is not None and not isinstance(approval, ApprovalDecision):
         raise TypeError("approval must be an ApprovalDecision or None")
     if approval is not None and not isinstance(approval.action_id, UUID):
-        raise ValueError("Approval action_id must be a UUID")
+        raise TypeError("Approval action_id must be a UUID")
     # Reject foreign approval evidence before LangGraph can persist it in this thread.
     # The route gate also checks identity, but checkpoint contents must stay isolated.
     if approval is not None and approval.action_id != workflow.action_id:
