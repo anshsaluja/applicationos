@@ -33,6 +33,13 @@ def plan_persisted_workflow(session, action_id: UUID, *, graph=None) -> dict[str
     workflow = WorkflowRepository(session).get(action_id)
     if workflow is None:
         return None
+    # Repository lookups are scoped by the requested action. A corrupted or
+    # misrouted row must never be planned under another action's checkpoint.
+    if workflow.action_id != action_id:
+        return {
+            "next_step": "reconcile",
+            "explanation": "Persisted workflow identity does not match requested action",
+        }
     approval = ApprovalRepository(session).get(action_id)
     outbox = session.get(WorkflowOutboxRow, action_id)
     receipt = session.get(SyntheticReceiptRow, action_id)
