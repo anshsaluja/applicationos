@@ -146,6 +146,22 @@ def main():
     # Opt-in approval path: require BOTH a disposable reviewer token and explicit local-only mode.
     # An ambient reviewer token alone must never authorize smoke-test decisions.
     token = os.getenv("APPLICATIONOS_SMOKE_REVIEW_TOKEN", "")
+    # Every smoke invocation, including the post-restart no-opt-in journey,
+    # must prove that a forged reviewer credential cannot authorize an action.
+    # This is intentionally checked before the optional synthetic execution path.
+    forged_body = json.dumps({"decision": "approved", "reason": "Forged reviewer"}).encode()
+    try:
+        request(
+            "POST", "/v1/workflows/" + action_id + "/decision", forged_body,
+            extra_headers={"X-Review-Token": "invalid-synthetic-review-token"},
+        )
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 403, f"Forged reviewer token returned {exc.code}, expected 403"
+    else:
+        raise AssertionError("Forged reviewer credential approved a workflow")
+    assert request("GET", "/v1/workflows/" + action_id)["status"] == "awaiting_approval", (
+        "Forged reviewer request mutated the pending approval state"
+    )
     if os.getenv("APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION") == "local-only" and not token:
         raise AssertionError("Synthetic execution was requested without an approval test token")
     if token and os.getenv("APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION") == "local-only":
