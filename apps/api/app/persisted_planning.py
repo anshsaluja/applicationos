@@ -15,7 +15,7 @@ from .persistence import (
     WorkflowOutboxRow,
     WorkflowRepository,
 )
-from .planning_graph import build_planning_graph
+from .planning_graph import build_planning_graph, plan_with_fresh_evidence
 
 
 def plan_persisted_workflow(session, action_id: UUID, *, graph=None) -> dict[str, str] | None:
@@ -69,9 +69,10 @@ def plan_persisted_workflow(session, action_id: UUID, *, graph=None) -> dict[str
             "explanation": "Successful checkpoint lacks durable dispatch evidence",
         }
     planner = graph if graph is not None else build_planning_graph()
-    state = {"workflow": workflow, "approval": approval, "next_step": "", "explanation": ""}
-    if graph is not None:
-        result = planner.invoke(state, config=checkpoint_config(action_id))
-    else:
-        result = planner.invoke(state)
+    result = plan_with_fresh_evidence(
+        planner,
+        workflow=workflow,
+        approval=approval,
+        config=checkpoint_config(action_id) if graph is not None else None,
+    )
     return {"next_step": result["next_step"], "explanation": result["explanation"]}
