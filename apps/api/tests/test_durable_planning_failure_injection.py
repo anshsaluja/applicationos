@@ -132,3 +132,45 @@ def test_existing_checkpoint_graph_does_not_rerun_schema_setup(monkeypatch):
         events.append("use")
 
     assert events == ["open", "compile", "use", "close"]
+
+
+def test_runtime_failure_closes_saver_and_reopen_uses_same_dsn(monkeypatch):
+    """A failed planning request must release its connection for recovery."""
+    events = []
+    compiled = []
+
+    class FakeSaver:
+        @staticmethod
+        @contextmanager
+        def from_conn_string(dsn):
+            events.append(("open", dsn))
+            saver = object()
+            try:
+                yield saver
+            finally:
+                events.append(("close", dsn))
+
+    def compile_graph(*, checkpointer):
+        compiled.append(checkpointer)
+        return object()
+
+    monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
+    monkeypatch.setattr(durable_planning, "build_planning_graph", compile_graph)
+    dsn = "postgresql+psycopg://localhost/applicationos"
+    normalized = "postgresql://localhost/applicationos"
+
+    with pytest.raises(RuntimeError, match="interrupted"):
+        with durable_planning.postgres_planning_graph(dsn):
+            raise RuntimeError("interrupted")
+
+    with durable_planning.postgres_planning_graph(dsn) as recovered:
+        assert recovered is not None
+
+    assert events == [
+        ("open", normalized),
+        ("close", normalized),
+        ("open", normalized),
+        ("close", normalized),
+    ]
+    assert len(compiled) == 2
+    assert compiled[0] is not compiled[1]
