@@ -70,7 +70,7 @@ def test_planning_graph_rejects_unattributed_approval():
 
 @pytest.mark.parametrize(
     "invalid_key",
-    ["", " ", "leading ", "embedded\\nnewline", "zero\\x00byte", "a" * 201, None, 123, True],
+    ["", " ", "leading ", "embedded\nnewline", "zero\x00byte", "a" * 201, None, 123, True],
 )
 def test_recovered_invalid_idempotency_key_never_recommends_claim(invalid_key):
     """Restored checkpoint fields can bypass Pydantic validators."""
