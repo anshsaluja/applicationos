@@ -12,7 +12,7 @@ from uuid import UUID
 from langgraph.graph import END, START, StateGraph
 
 from .domain.approvals import ApprovalDecision, ApprovalGateError, require_approved
-from .domain.workflows import WorkflowState, WorkflowStatus
+from .domain.workflows import WorkflowState, WorkflowStatus, validate_workflow_idempotency_key
 
 
 class PlanningState(TypedDict):
@@ -43,6 +43,16 @@ def _route(state: PlanningState) -> dict[str, str]:
         or not 0 <= workflow.attempt <= workflow.max_attempts
     ):
         return {"next_step": "reconcile", "explanation": "Invalid execution attempt requires reconciliation"}
+    # Pydantic model_copy(update=...) and restored checkpoints can bypass
+    # field validation. Never recommend an outbox claim for an invalid key.
+    key = workflow.idempotency_key
+    if not isinstance(key, str) or not 1 <= len(key) <= 200:
+        return {"next_step": "reconcile", "explanation": "Invalid idempotency key requires reconciliation"}
+    try:
+        validate_workflow_idempotency_key(key)
+    except ValueError:
+        return {"next_step": "reconcile", "explanation": "Invalid idempotency key requires reconciliation"}
+
     if status in {WorkflowStatus.RUNNING, WorkflowStatus.SUCCEEDED} and workflow.attempt == 0:
         return {"next_step": "reconcile", "explanation": "Missing execution claim requires reconciliation"}
     if status in {WorkflowStatus.READY, WorkflowStatus.AWAITING_APPROVAL} and workflow.attempt >= workflow.max_attempts:
