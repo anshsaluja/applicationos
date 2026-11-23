@@ -66,3 +66,37 @@ def test_planning_graph_rejects_unattributed_approval():
         {"workflow": workflow, "approval": approval, "next_step": "", "explanation": ""}
     )
     assert result["next_step"] == "request_review"
+
+
+@pytest.mark.parametrize(
+    "invalid_key",
+    ["", " ", "leading ", "embedded\\nnewline", "zero\\x00byte", "a" * 201, None, 123, True],
+)
+def test_recovered_invalid_idempotency_key_never_recommends_claim(invalid_key):
+    """Restored checkpoint fields can bypass Pydantic validators."""
+    action_id = uuid4()
+    workflow = WorkflowState(
+        action_id=action_id, idempotency_key="valid-key", status=WorkflowStatus.READY
+    ).model_copy(update={"idempotency_key": invalid_key})
+    approval = ApprovalDecision(
+        action_id=action_id, status=ApprovalStatus.APPROVED, reviewer_id="reviewer"
+    )
+    result = build_planning_graph().invoke(
+        {"workflow": workflow, "approval": approval, "next_step": "", "explanation": ""}
+    )
+    assert result["next_step"] == "reconcile"
+    assert "idempotency key" in result["explanation"]
+
+
+def test_valid_recovered_idempotency_key_can_reach_claim_boundary():
+    action_id = uuid4()
+    workflow = WorkflowState(
+        action_id=action_id, idempotency_key="safe-replay-key", status=WorkflowStatus.READY
+    )
+    approval = ApprovalDecision(
+        action_id=action_id, status=ApprovalStatus.APPROVED, reviewer_id="reviewer"
+    )
+    result = build_planning_graph().invoke(
+        {"workflow": workflow, "approval": approval, "next_step": "", "explanation": ""}
+    )
+    assert result["next_step"] == "claim_outbox"
