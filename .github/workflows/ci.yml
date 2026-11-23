@@ -259,6 +259,31 @@ jobs:
             -e APPLICATIONOS_SMOKE_REVIEW_TOKEN="$APPLICATIONOS_REVIEW_TOKEN" \
             -e APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION=local-only \
             api python /workspace/scripts/smoke_local_journey.py
+      - name: Verify persisted workflows survive API restart
+        run: |
+          set -Eeuo pipefail
+          # Smoke has already persisted documents, requirements, and approval records.
+          before=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM workflow_checkpoints")
+          test "$before" -gt 0
+          docker compose restart api
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:8000/ready | grep -q '"ready"'; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              echo "API did not recover after restart" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          after=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM workflow_checkpoints")
+          test "$before" = "$after"
+          # A fresh smoke journey after restart checks live HTTP writes, idempotency,
+          # document provenance, and the human approval boundary against the same DB.
+          docker compose exec -T \
+            -e APPLICATIONOS_SMOKE_REVIEW_TOKEN= \
+            -e APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION= \
+            api python /workspace/scripts/smoke_local_journey.py
       - name: Run real-backend Playwright provenance journey
         env:
           APPLICATIONOS_REAL_E2E: '1'
