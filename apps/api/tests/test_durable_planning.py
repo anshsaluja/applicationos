@@ -249,3 +249,20 @@ def test_checkpoint_dsn_requires_explicit_database(invalid_dsn):
     """Never silently checkpoint to a driver-selected default database."""
     with pytest.raises(ValueError, match="name a database"):
         durable_planning.checkpoint_dsn(invalid_dsn)
+
+
+@pytest.mark.parametrize(
+    "invalid_dsn",
+    [
+        " postgresql://localhost/app",
+        "postgresql://localhost/app ",
+        "postgresql://localhost/app\n",
+        "postgresql://localhost/app\t",
+        "postgresql://localhost/app\u200b",
+        "postgresql://localhost/app\x00",
+    ],
+)
+def test_checkpoint_dsn_rejects_invisible_configuration_characters(invalid_dsn):
+    """Never silently reinterpret or forward ambiguous checkpoint connections."""
+    with pytest.raises(ValueError, match="unsafe whitespace or controls"):
+        durable_planning.checkpoint_dsn(invalid_dsn)
