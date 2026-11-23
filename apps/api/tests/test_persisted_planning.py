@@ -290,3 +290,30 @@ def test_completion_requires_matching_dispatch_provenance(
         SimpleNamespace(action_id=action_id, adapter=adapter, idempotency_key=receipt_key),
     )
     assert plan_persisted_workflow(session, action_id)["next_step"] == "reconcile"
+
+
+
+def test_durable_plan_rejects_foreign_approval_before_checkpoint_write(monkeypatch):
+    """Corrupt cross-action evidence must never enter a durable graph checkpoint."""
+    action_id = uuid4()
+    workflow = WorkflowState(
+        action_id=action_id, idempotency_key="safe-key", status=WorkflowStatus.READY
+    )
+    foreign_approval = ApprovalDecision(
+        action_id=uuid4(), status=ApprovalStatus.APPROVED, reviewer_id="operator"
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.WorkflowRepository",
+        lambda session: SimpleNamespace(get=lambda key: workflow),
+    )
+    monkeypatch.setattr(
+        "app.persisted_planning.ApprovalRepository",
+        lambda session: SimpleNamespace(get=lambda key: foreign_approval),
+    )
+
+    class ForbiddenGraph:
+        def invoke(self, *args, **kwargs):
+            pytest.fail("Foreign approval was written to a checkpoint")
+
+    with pytest.raises(ValueError, match="Approval action_id must match"):
+        plan_persisted_workflow(FakeSession(), action_id, graph=ForbiddenGraph())
