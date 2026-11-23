@@ -7,7 +7,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "smoke_local_journey.
 
 
 def approval_requests(tree):
-    """Find POST calls to the workflow decision endpoint."""
+    """Find synthetic approval POSTs; distinguish deliberately forged probes."""
     return [
         node for node in ast.walk(tree)
         if isinstance(node, ast.Call)
@@ -22,6 +22,21 @@ def approval_requests(tree):
             and "/decision" in ast.unparse(node.args[1])
         )
     ]
+
+
+def is_forged_negative_probe(node):
+    """Only exempt a call with the explicit invalid credential literal."""
+    for keyword in node.keywords:
+        if keyword.arg != "extra_headers" or not isinstance(keyword.value, ast.Dict):
+            continue
+        headers = keyword.value
+        return any(
+            isinstance(key, ast.Constant) and key.value == "X-Review-Token"
+            and isinstance(value, ast.Constant)
+            and value.value == "invalid-synthetic-review-token"
+            for key, value in zip(headers.keys, headers.values)
+        )
+    return False
 
 
 def guarded_approval_calls(main):
@@ -71,9 +86,11 @@ class SmokeApprovalOptInTests(unittest.TestCase):
         )
         calls = approval_requests(main)
         self.assertTrue(calls, "Expected synthetic approval requests")
+        forged = [call for call in calls if is_forged_negative_probe(call)]
+        self.assertEqual(len(forged), 1, "Expected one explicit forged-token negative probe")
         guarded = guarded_approval_calls(main)
         self.assertEqual(
-            {id(call) for call in calls}, guarded,
+            {id(call) for call in calls if not is_forged_negative_probe(call)}, guarded,
             "Every synthetic approval POST must be inside the body of a token "
             "and explicit local-only execution guard",
         )
