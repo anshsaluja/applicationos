@@ -71,8 +71,13 @@ def _route(state: PlanningState) -> dict[str, str]:
     if status == WorkflowStatus.PENDING:
         return {"next_step": "request_review", "explanation": "Action has not entered review"}
 
+    # A restored approval may be a plain mapping or another invalid object;
+    # never interpret it as authorization or crash the recovery planner.
+    approval = state.get("approval")
+    if approval is not None and not isinstance(approval, ApprovalDecision):
+        return {"next_step": "request_review", "explanation": "Verified human approval is required"}
     try:
-        require_approved(state["approval"], workflow.action_id)
+        require_approved(approval, workflow.action_id)
     except ApprovalGateError:
         return {"next_step": "request_review", "explanation": "Verified human approval is required"}
 
