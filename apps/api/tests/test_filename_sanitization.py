@@ -34,3 +34,11 @@ def test_upload_filename_rejects_dot_only_navigation_labels():
     assert _safe_filename("folder/....") == "document"
     assert _safe_filename("." * 300) == "document"
     assert _safe_filename("report...") == "report..."
+
+
+def test_upload_filename_removes_private_use_and_unassigned_codepoints():
+    # Private-use glyphs can render differently across clients and obscure labels.
+    assert _safe_filename("proof\ue000.txt") == "proof.txt"
+    assert _safe_filename("\ue000") == "document"
+    assert _safe_filename("proof\u0378.txt") == "proof.txt"
+    assert _safe_filename("proof\ud800.txt") == "proof.txt"
