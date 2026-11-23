@@ -114,7 +114,7 @@ def _safe_filename(filename: str | None) -> str:
     basename = (filename or "document").replace("\\", "/").split("/")[-1]
     basename = "".join(
         ch for ch in unicodedata.normalize("NFC", basename)
-        if ch.isprintable() and unicodedata.category(ch) != "Cf" and ch not in "/\\\\"
+        if ch.isprintable() and unicodedata.category(ch) not in {"Cf", "Cs", "Co", "Cn"} and ch not in "/\\\\"
     ).strip()
     # Dot-only names are filesystem navigation tokens, not useful provenance labels.
     # Reject them even though the original path separators have been removed.
