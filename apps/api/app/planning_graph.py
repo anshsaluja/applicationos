@@ -23,7 +23,11 @@ class PlanningState(TypedDict):
 
 
 def _route(state: PlanningState) -> dict[str, str]:
-    workflow = state["workflow"]
+    workflow = state.get("workflow")
+    # LangGraph TypedDict state is not runtime-validated when restoring a
+    # checkpoint. A malformed or missing workflow must never reach a claim.
+    if not isinstance(workflow, WorkflowState):
+        return {"next_step": "reconcile", "explanation": "Invalid workflow state requires reconciliation"}
     status = workflow.status
     # Checkpoint payloads can outlive enum/schema migrations. Unknown statuses
     # must never crash recovery or fall through to a dispatch recommendation.
