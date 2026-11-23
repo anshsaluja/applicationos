@@ -22,7 +22,7 @@ def test_invalid_checkpoint_database_never_opens_connection(monkeypatch, invalid
     monkeypatch.setattr(
         durable_planning.PostgresSaver, "from_conn_string", unexpected_connection
     )
-    with pytest.raises(ValueError, match="database"), durable_planning.postgres_planning_graph(invalid_dsn):
+    with pytest.raises(ValueError, match="database|unsafe whitespace or controls"), durable_planning.postgres_planning_graph(invalid_dsn):
         pass
 
 
