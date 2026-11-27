@@ -24,7 +24,7 @@ class DockerEndpointSafetyTests(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 "printf '%s\\n' \"$*\" >> \"$DOCKER_CALL_LOG\"\n"
                 "case \"$*\" in\n"
-                "  'compose version') exit 0 ;;\n"
+                "  compose\\ --file\\ *\\ version) exit 0 ;;\n"
                 "  'context show') printf '%s\\n' \"$FAKE_DOCKER_CONTEXT\" ;;\n"
                 "  context\\ inspect\\ *\\ --format\\ *) "
                 "printf '%s\\n' \"$FAKE_CONTEXT_ENDPOINT\" ;;\n"
@@ -89,7 +89,7 @@ class DockerEndpointSafetyTests(unittest.TestCase):
                 result, calls = self.run_with_endpoint(docker_host=endpoint)
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertIn("Refusing non-local DOCKER_HOST", result.stderr)
-                self.assertEqual(calls, ["compose version"])
+                self.assertEqual(calls, [f"compose --file {ROOT / 'docker-compose.yml'} version"])
 
     def test_malformed_local_docker_host_is_rejected_before_daemon_access(self):
         for endpoint in ("unix://", "unix://relative", "npipe://", "npipe://server/pipe/docker_engine"):
@@ -97,7 +97,7 @@ class DockerEndpointSafetyTests(unittest.TestCase):
                 result, calls = self.run_with_endpoint(docker_host=endpoint)
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertIn("Refusing non-local DOCKER_HOST", result.stderr)
-                self.assertEqual(calls, ["compose version"])
+                self.assertEqual(calls, [f"compose --file {ROOT / 'docker-compose.yml'} version"])
 
     def test_malformed_local_context_is_rejected_before_daemon_access(self):
         for endpoint in ("unix://", "unix://relative", "npipe://", "npipe://server/pipe/docker_engine"):
@@ -114,7 +114,7 @@ class DockerEndpointSafetyTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertIn("Refusing non-local Docker context endpoint", result.stderr)
                 self.assertEqual(calls, [
-                    "compose version",
+                    f"compose --file {ROOT / 'docker-compose.yml'} version",
                     "context show",
                     "context inspect default --format {{.Endpoints.docker.Host}}",
                 ])
@@ -126,7 +126,7 @@ class DockerEndpointSafetyTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn("Refusing non-local Docker context endpoint", result.stderr)
         self.assertEqual(calls, [
-            "compose version",
+            f"compose --file {ROOT / 'docker-compose.yml'} version",
             "context show",
             "context inspect production --format {{.Endpoints.docker.Host}}",
         ])
@@ -149,7 +149,7 @@ class DockerEndpointSafetyTests(unittest.TestCase):
             context_endpoint="unix:///var/run/docker.sock",
         )
         self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertEqual(calls, ["compose version"])
+        self.assertEqual(calls, [f"compose --file {ROOT / 'docker-compose.yml'} version"])
 
     def test_missing_or_malformed_context_endpoint_fails_closed(self):
         # A context without a usable local socket must never reach docker info.
@@ -166,7 +166,7 @@ class DockerEndpointSafetyTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn("Refusing non-local DOCKER_HOST", result.stderr)
-        self.assertEqual(calls, ["compose version"])
+        self.assertEqual(calls, [f"compose --file {ROOT / 'docker-compose.yml'} version"])
 
     def test_local_context_reaches_daemon_check(self):
         result, calls = self.run_with_endpoint()
@@ -185,11 +185,11 @@ class DockerEndpointSafetyTests(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 "printf '%s\\n' \"$*\" >> \"$DOCKER_CALL_LOG\"\n"
                 "case \"$*\" in\n"
-                "  'compose version') exit 0 ;;\n"
+                "  compose\\ --file\\ *\\ version) exit 0 ;;\n"
                 "  'context show') echo default ;;\n"
                 "  context\\ inspect\\ *\\ --format\\ *) echo unix:///var/run/docker.sock ;;\n"
                 "  'info') exit 0 ;;\n"
-                "  'compose ps --all --services') echo postgres ;;\n"
+                "  compose\\ --file\\ *\\ ps\\ --all\\ --services) echo postgres ;;\n"
                 "  *) echo unexpected-operation >&2; exit 99 ;;\n"
                 "esac\n"
             )
@@ -207,8 +207,8 @@ class DockerEndpointSafetyTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 2, result.stderr)
             self.assertIn("Refusing to modify existing Compose services", result.stderr)
-            self.assertIn("compose ps --all --services", calls.read_text())
-            self.assertNotIn("compose up", calls.read_text())
+            self.assertIn(f"compose --file {ROOT / 'docker-compose.yml'} ps --all --services", calls.read_text())
+            self.assertNotIn(f"compose --file {ROOT / 'docker-compose.yml'} up", calls.read_text())
 
 
     def test_orphaned_compose_volume_blocks_startup(self):
@@ -221,13 +221,13 @@ class DockerEndpointSafetyTests(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 "printf '%s\\n' \"$*\" >> \"$DOCKER_CALL_LOG\"\n"
                 "case \"$*\" in\n"
-                "  'compose version') exit 0 ;;\n"
+                "  compose\\ --file\\ *\\ version) exit 0 ;;\n"
                 "  'context show') echo default ;;\n"
                 "  context\ inspect\ *\ --format\ *) echo unix:///var/run/docker.sock ;;\n"
                 "  'info') exit 0 ;;\n"
-                "  'compose ps --all --services') exit 0 ;;\n"
-                "  'compose config --quiet') exit 0 ;;\n"
-                "  'compose config --format json') echo '{\"name\":\"applicationos\"}' ;;\n"
+                "  compose\\ --file\\ *\\ ps\\ --all\\ --services) exit 0 ;;\n"
+                "  compose\\ --file\\ *\\ config\\ --quiet) exit 0 ;;\n"
+                "  compose\\ --file\\ *\\ config\\ --format\\ json) echo '{\"name\":\"applicationos\"}' ;;\n"
                 "  volume\ ls\ *) echo applicationos_postgres_data ;;\n"
                 "  *) echo unexpected-operation >&2; exit 99 ;;\n"
                 "esac\n"
@@ -248,7 +248,7 @@ class DockerEndpointSafetyTests(unittest.TestCase):
             self.assertIn("Refusing to reuse existing Compose volumes", result.stderr)
             self.assertIn("applicationos_postgres_data", result.stderr)
             self.assertIn("volume ls --filter label=com.docker.compose.project=applicationos", calls.read_text())
-            self.assertNotIn("compose up", calls.read_text())
+            self.assertNotIn(f"compose --file {ROOT / 'docker-compose.yml'} up", calls.read_text())
 
 
 if __name__ == "__main__":
