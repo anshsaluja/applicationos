@@ -236,6 +236,12 @@ def main():
                 receipt_action_id = original_receipt.action_id
             completed = request("GET", "/v1/workflows/" + action_id)
             assert completed["status"] == "succeeded"
+            dispatch = request("GET", "/v1/workflows/" + action_id + "/dispatch-status")
+            assert dispatch["action_id"] == action_id
+            assert dispatch["workflow_status"] == "succeeded"
+            assert dispatch["synthetic_receipt_present"] is True
+            assert dispatch["synthetic_receipt_valid"] is True
+            assert dispatch["reconciliation_required"] is False
             assert completed["idempotency_key"] == "smoke-" + action_id
             # An HTTP retry after completion must resolve to the original
             # terminal checkpoint rather than schedule a second action.
@@ -262,6 +268,12 @@ def main():
                 assert persisted_receipt is not None
                 assert persisted_receipt.action_id == receipt_action_id
             assert request("GET", "/v1/workflows/" + rejected_action_id)["status"] == "failed"
+            rejected_dispatch = request("GET", "/v1/workflows/" + rejected_action_id + "/dispatch-status")
+            assert rejected_dispatch["workflow_status"] == "failed"
+            assert rejected_dispatch["outbox_status"] is None
+            assert rejected_dispatch["synthetic_receipt_present"] is False
+            assert rejected_dispatch["synthetic_receipt_valid"] is False
+            assert rejected_dispatch["reconciliation_required"] is False
             boundary_result = "approved synthetic no-op completed once; rejected action never dispatched"
     else:
         boundary_result = "stopped before approval or execution"
