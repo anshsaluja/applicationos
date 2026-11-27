@@ -612,6 +612,7 @@ assert get(f"/v1/workflows/{action_id}") == original, (
     "Rejected requests mutated the checkpoint after PostgreSQL restart"
 )
 dispatch = get(f"/v1/workflows/{action_id}/dispatch-status")
+assert dispatch["action_id"] == action_id, "PostgreSQL restart returned dispatch status for a different workflow"
 assert dispatch["workflow_status"] == "awaiting_approval"
 assert dispatch["outbox_status"] is None
 assert dispatch["synthetic_receipt_present"] is False
