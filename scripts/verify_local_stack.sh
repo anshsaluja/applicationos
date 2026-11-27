@@ -18,6 +18,18 @@ for override in \
   fi
 done
 
+# Compose can discover these files without an exported COMPOSE_FILE.
+for config in .env compose.yaml compose.yml docker-compose.yaml \
+  compose.override.yaml compose.override.yml docker-compose.override.yaml docker-compose.override.yml; do
+  if [[ -e "$config" || -L "$config" ]]; then
+    echo "Refusing implicit Compose configuration: $config. Use a clean checkout." >&2
+    exit 2
+  fi
+done
+# This acceptance path never performs signed approvals; do not forward
+# ambient reviewer credentials into the temporary API container.
+export APPLICATIONOS_REVIEW_TOKEN= APPLICATIONOS_REVIEWER_ID=
+
 if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
   echo "Docker with Compose v2 is required." >&2
   exit 2
