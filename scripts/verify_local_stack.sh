@@ -30,7 +30,11 @@ done
 # ambient reviewer credentials into the temporary API container.
 export APPLICATIONOS_REVIEW_TOKEN= APPLICATIONOS_REVIEWER_ID=
 
-if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+compose() {
+  docker compose --file "$PWD/docker-compose.yml" "$@"
+}
+
+if ! command -v docker >/dev/null 2>&1 || ! compose version >/dev/null 2>&1; then
   echo "Docker with Compose v2 is required." >&2
   exit 2
 fi
@@ -60,7 +64,7 @@ fi
 
 # Never disrupt an existing Compose stack, including stopped containers:
 # `up` could recreate them or unexpectedly reuse their persisted volumes.
-existing_services="$(docker compose ps --all --services)"
+existing_services="$(compose ps --all --services)"
 if [[ -n "$existing_services" ]]; then
   echo "Refusing to modify existing Compose services: $existing_services" >&2
   exit 2
@@ -69,8 +73,8 @@ fi
 # Never run a verification journey against potentially developer-owned data.
 # Resolve the Compose project name from its validated configuration rather
 # than guessing a directory prefix or trusting a caller-provided project name.
-docker compose config --quiet
-compose_project="$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
+compose config --quiet
+compose_project="$(compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
 if [[ -z "$compose_project" ]]; then
   echo "Unable to determine Compose project name." >&2
   exit 2
@@ -85,14 +89,14 @@ started_stack=0
 cleanup() {
   if [[ "$started_stack" -eq 1 ]]; then
     # Preserve volumes and data for inspection; stop only our own stack.
-    docker compose down || true
+    compose down || true
   fi
 }
 trap cleanup EXIT
 
-docker compose config --quiet
+compose config --quiet
 started_stack=1
-docker compose up -d --wait --wait-timeout 240 postgres api web
+compose up -d --wait --wait-timeout 240 postgres api web
 # Docker reports container health, but verify that the browser-facing page is reachable
 # from the host as well. This catches incorrect port mappings and startup races.
 python3 - <<'PY'
@@ -158,9 +162,9 @@ else:
 PY
 # The API intentionally does not create tables at startup. Prepare the local
 # database explicitly before testing, just as the CI Compose job does.
-docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 \
+compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 \
   -c "CREATE EXTENSION IF NOT EXISTS vector"
-docker compose exec -T api python - <<'PY'
+compose exec -T api python - <<'PY'
 from app.persistence import Base, build_engine
 
 engine = build_engine()
@@ -173,7 +177,7 @@ PY
 # Run inside the API container so the installed dependencies and local
 # PostgreSQL hostname match the real service, without host Python setup.
 # Approval and synthetic execution remain opt-in; never supply a token here.
-smoke_result="$(docker compose exec -T \
+smoke_result="$(compose exec -T \
   -e APPLICATIONOS_SMOKE_REVIEW_TOKEN= \
   -e APPLICATIONOS_SMOKE_SYNTHETIC_EXECUTION= \
   api python /workspace/scripts/smoke_local_journey.py)"
@@ -225,29 +229,29 @@ assert len(digest) == 64 and all(c in "0123456789abcdef" for c in digest)
 print(digest)
 PY
 )"
-docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT extname FROM pg_extension WHERE extname = 'vector'" | grep -qx vector
 # Check the actual pgvector distance operator, not only extension registration.
-docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "WITH candidates(id, embedding) AS (VALUES (1, '[1,0,0]'::vector(3)), (2, '[0,1,0]'::vector(3)), (3, '[0,0,1]'::vector(3))) SELECT (SELECT id FROM candidates ORDER BY embedding <-> '[0.9,0.1,0]'::vector(3), id LIMIT 1) = 1 AND abs(('[1,0,0]'::vector(3) <-> '[0,1,0]'::vector(3)) - sqrt(2.0)) < 0.00001" | grep -qx t
-docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) > 0 FROM documents" | grep -qx t
 # A smoke pass is not sufficient if records disappear after the API restarts.
 # Capture a specific awaiting-approval checkpoint, not just aggregate row counts.
-persisted_checkpoint="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+persisted_checkpoint="$(compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT status FROM workflow_checkpoints WHERE action_id = '$checkpoint_id'")"
 test "$persisted_checkpoint" = awaiting_approval
 if [[ -z "$checkpoint_id" ]]; then
   echo "No awaiting-approval workflow persisted by smoke test." >&2
   exit 1
 fi
-documents_before="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+documents_before="$(compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) FROM documents")"
-requirements_before="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+requirements_before="$(compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) FROM requirements")"
 test "$documents_before" -gt 0
 test "$requirements_before" -gt 0
-docker compose restart api
+compose restart api
 python3 - <<'PY'
 import json
 import time
@@ -442,7 +446,7 @@ PY
 # Exercise a real PostgreSQL process restart, not only an API restart.
 # A connection pool may hold stale sockets briefly; wait for the API's actual
 # database-backed readiness endpoint before asserting durable state.
-docker compose restart postgres
+compose restart postgres
 python3 - <<'PY'
 import json
 import time
@@ -499,14 +503,14 @@ assert checkpoint["status"] == "awaiting_approval", (
 )
 print("Approval-gated workflow survived PostgreSQL restart: PASS")
 PY
-documents_after="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+documents_after="$(compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) FROM documents")"
-requirements_after="$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+requirements_after="$(compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "SELECT count(*) FROM requirements")"
 test "$documents_after" -eq "$documents_before"
 test "$requirements_after" -eq "$requirements_before"
 # PostgreSQL restart must restore working pgvector operators as well as rows.
-docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
+compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
   "WITH candidates(id, embedding) AS (VALUES (1, '[1,0,0]'::vector(3)), (2, '[0,1,0]'::vector(3)), (3, '[0,0,1]'::vector(3))) SELECT (SELECT id FROM candidates ORDER BY embedding <-> '[0.9,0.1,0]'::vector(3), id LIMIT 1) = 1 AND abs(('[1,0,0]'::vector(3) <-> '[0,1,0]'::vector(3)) - sqrt(2.0)) < 0.00001" | grep -qx t
 # Recheck exact document provenance after the PostgreSQL process restart.
 DOCUMENT_ID="$document_id" WORKSPACE_ID="$workspace_id" EXPECTED_SHA256="$expected_sha256" python3 - <<'PY'
