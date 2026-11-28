@@ -479,6 +479,8 @@ jobs:
             "SELECT action_id FROM workflow_checkpoints WHERE status = 'succeeded' ORDER BY action_id LIMIT 1")
           test -n "$action_id"
           before=$(curl --fail --silent --show-error --max-time 15 "http://127.0.0.1:8000/v1/workflows/$action_id")
+          dispatch_before=$(curl --fail --silent --show-error --max-time 15 "http://127.0.0.1:8000/v1/workflows/$action_id/dispatch-status")
+          printf '%s' "$dispatch_before" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["workflow_status"] == "succeeded"; assert d["synthetic_receipt_present"] is True; assert d["synthetic_receipt_valid"] is True; assert d["reconciliation_required"] is False'
           docker compose restart postgres
           # Compose restart does not guarantee that the application has
           # re-established a usable database connection. Check both layers.
@@ -496,6 +498,8 @@ jobs:
             "SELECT extname FROM pg_extension WHERE extname = 'vector'" | grep -qx vector
           after=$(curl --fail --silent --show-error --max-time 15 "http://127.0.0.1:8000/v1/workflows/$action_id")
           test "$after" = "$before" || { echo "Terminal checkpoint changed after DB restart" >&2; exit 1; }
+          dispatch_after=$(curl --fail --silent --show-error --max-time 15 "http://127.0.0.1:8000/v1/workflows/$action_id/dispatch-status")
+          test "$dispatch_before" = "$dispatch_after" || { echo "Dispatch evidence changed after DB restart" >&2; exit 1; }
           # Confirm the extension remains operational after the database restart,
           # rather than merely checking that its catalog entry survived.
           distance=$(docker compose exec -T postgres psql -U applicationos -d applicationos -v ON_ERROR_STOP=1 -Atc \
