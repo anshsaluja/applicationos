@@ -627,6 +627,11 @@ with post(f"/v1/workflows/{action_id}/request-review", {}) as response:
 assert get(f"/v1/workflows/{action_id}") == original, (
     "Duplicate review mutated the checkpoint after PostgreSQL restart"
 )
+# Re-read dispatch state after the duplicate review, not just the checkpoint.
+# A regression could enqueue an outbox intent without changing the checkpoint.
+assert get(f"/v1/workflows/{action_id}/dispatch-status") == dispatch, (
+    "Duplicate review changed dispatch state after PostgreSQL restart"
+)
 print("PostgreSQL restart idempotency and authorization boundaries: PASS")
 PY
 echo "Local HTTP, ingestion, exact SHA-256 provenance, idempotency, approval boundary, API and PostgreSQL restart authorization checks passed (browser and signed approval/execution NOT tested)."
