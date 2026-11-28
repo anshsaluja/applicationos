@@ -1,0 +1,268 @@
+"""Durable checkpoint wiring must be explicit and fail closed."""
+from contextlib import contextmanager
+from uuid import uuid4
+
+import pytest
+
+from app import durable_planning
+
+
+def test_checkpoint_config_uses_stable_action_identity():
+    action_id = uuid4()
+    assert durable_planning.checkpoint_config(action_id) == {
+        "configurable": {"thread_id": str(action_id)}
+    }
+
+
+@pytest.mark.parametrize("identifier", ["", "  "])
+def test_checkpoint_config_rejects_missing_identity(identifier):
+    with pytest.raises(ValueError, match="thread_id"):
+        durable_planning.checkpoint_config(identifier)
+
+
+@pytest.mark.parametrize("identifier", [None, 0, 42, False, object(), ["action"]])
+def test_checkpoint_config_rejects_non_string_identity(identifier):
+    """Do not persist arbitrary object representations as workflow identities."""
+    with pytest.raises(TypeError, match="thread_id"):
+        durable_planning.checkpoint_config(identifier)
+
+
+@pytest.mark.parametrize("identifier", ["action\ue000", "action\U000f0000", "action\U00100000"])
+def test_checkpoint_config_rejects_private_use_identity(identifier):
+    """Private-use code points have no standardized visual identity."""
+    with pytest.raises(ValueError, match="thread_id"):
+        durable_planning.checkpoint_config(identifier)
+
+
+
+def test_checkpoint_identity_has_bounded_utf8_storage_size():
+    """Multibyte identities must respect the persisted 128-byte key budget."""
+    assert durable_planning.checkpoint_config("é" * 64) == {
+        "configurable": {"thread_id": "é" * 64}
+    }
+    with pytest.raises(ValueError, match="thread_id"):
+        durable_planning.checkpoint_config("é" * 65)
+    with pytest.raises(ValueError, match="thread_id"):
+        durable_planning.checkpoint_config("a" * 127 + "é")
+
+
+def test_checkpoint_connection_is_closed_and_setup_is_opt_in(monkeypatch):
+    events = []
+    saver = object()
+
+    @contextmanager
+    def fake_connection(dsn):
+        events.append(("open", dsn))
+        try:
+            yield saver
+        finally:
+            events.append(("close", dsn))
+
+    class FakeSaver:
+        @staticmethod
+        def from_conn_string(dsn):
+            return fake_connection(dsn)
+
+    def fake_graph(*, checkpointer):
+        assert checkpointer is saver
+        return "compiled-graph"
+
+    monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
+    monkeypatch.setattr(durable_planning, "build_planning_graph", fake_graph)
+
+    with durable_planning.postgres_planning_graph("postgresql://localhost/test") as graph:
+        assert graph == "compiled-graph"
+    assert events == [
+        ("open", "postgresql://localhost/test"),
+        ("close", "postgresql://localhost/test"),
+    ]
+
+
+def test_checkpoint_setup_only_when_explicitly_requested(monkeypatch):
+    events = []
+
+    class FakeSaver:
+        @classmethod
+        @contextmanager
+        def from_conn_string(cls, dsn):
+            yield cls()
+
+        def setup(self):
+            events.append("setup")
+
+    monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
+    monkeypatch.setattr(durable_planning, "build_planning_graph", lambda **kwargs: object())
+
+    with durable_planning.postgres_planning_graph("postgresql://localhost/test"):
+        pass
+    assert events == []
+    with durable_planning.postgres_planning_graph(
+        "postgresql://localhost/test", initialize=True
+    ):
+        pass
+    assert events == ["setup"]
+
+
+def test_checkpoint_dsn_is_required():
+    with pytest.raises(ValueError, match="DSN"), durable_planning.postgres_planning_graph(" "):
+        pass
+
+
+@pytest.mark.parametrize(
+    ("input_dsn", "expected"),
+    [
+        ("postgresql://localhost/app", "postgresql://localhost/app"),
+        ("postgresql+psycopg://localhost/app", "postgresql://localhost/app"),
+        (
+            "postgresql+psycopg://user:p%40ss@localhost:5432/app?sslmode=require",
+            "postgresql://user:p%40ss@localhost:5432/app?sslmode=require",
+        ),
+    ],
+)
+def test_checkpoint_dsn_normalizes_sqlalchemy_urls(input_dsn, expected):
+    assert durable_planning.checkpoint_dsn(input_dsn) == expected
+
+
+@pytest.mark.parametrize(
+    "invalid_dsn",
+    ["sqlite:///tmp/test.db", "mysql://localhost/app", "postgresql+asyncpg://localhost/app", "not a url"],
+)
+def test_checkpoint_dsn_rejects_unsupported_or_invalid_urls(invalid_dsn):
+    with pytest.raises(ValueError, match="PostgreSQL"):
+        durable_planning.checkpoint_dsn(invalid_dsn)
+
+
+def test_checkpoint_connection_normalizes_sqlalchemy_url(monkeypatch):
+    observed = []
+
+    class FakeSaver:
+        @staticmethod
+        @contextmanager
+        def from_conn_string(dsn):
+            observed.append(dsn)
+            yield object()
+
+    monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
+    monkeypatch.setattr(durable_planning, "build_planning_graph", lambda **kwargs: object())
+    with durable_planning.postgres_planning_graph("postgresql+psycopg://localhost/app"):
+        pass
+    assert observed == ["postgresql://localhost/app"]
+
+
+def test_checkpoint_connection_closes_when_graph_compilation_fails(monkeypatch):
+    """Failed graph compilation must not leak a PostgreSQL saver connection."""
+    events = []
+
+    class FakeSaver:
+        @staticmethod
+        @contextmanager
+        def from_conn_string(dsn):
+            events.append("open")
+            try:
+                yield object()
+            finally:
+                events.append("close")
+
+    def broken_graph(*, checkpointer):
+        raise RuntimeError("graph compilation failed")
+
+    monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
+    monkeypatch.setattr(durable_planning, "build_planning_graph", broken_graph)
+
+    with (
+        pytest.raises(RuntimeError, match="graph compilation failed"),
+        durable_planning.postgres_planning_graph("postgresql://localhost/test"),
+    ):
+        pass
+    assert events == ["open", "close"]
+
+
+def test_checkpoint_connection_closes_when_caller_fails(monkeypatch):
+    """Request failure inside the graph context must release its connection."""
+    events = []
+
+    class FakeSaver:
+        @staticmethod
+        @contextmanager
+        def from_conn_string(dsn):
+            events.append("open")
+            try:
+                yield object()
+            finally:
+                events.append("close")
+
+    monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
+    monkeypatch.setattr(durable_planning, "build_planning_graph", lambda **kwargs: object())
+
+    with (
+        pytest.raises(RuntimeError, match="request interrupted"),
+        durable_planning.postgres_planning_graph("postgresql://localhost/test"),
+    ):
+        raise RuntimeError("request interrupted")
+    assert events == ["open", "close"]
+
+
+
+def test_checkpoint_connection_closes_when_migration_fails(monkeypatch):
+    """A failed schema migration must release the saver and never compile a graph."""
+    events = []
+
+    class FakeSaver:
+        @staticmethod
+        @contextmanager
+        def from_conn_string(dsn):
+            events.append("open")
+            try:
+                yield FakeSaver()
+            finally:
+                events.append("close")
+
+        def setup(self):
+            events.append("setup")
+            raise RuntimeError("checkpoint migration failed")
+
+    def unexpected_compile(*, checkpointer):
+        pytest.fail("graph must not compile after checkpoint migration failure")
+
+    monkeypatch.setattr(durable_planning, "PostgresSaver", FakeSaver)
+    monkeypatch.setattr(durable_planning, "build_planning_graph", unexpected_compile)
+
+    with (
+        pytest.raises(RuntimeError, match="checkpoint migration failed"),
+        durable_planning.postgres_planning_graph(
+            "postgresql://localhost/test", initialize=True
+        ),
+    ):
+        pass
+    assert events == ["open", "setup", "close"]
+
+
+@pytest.mark.parametrize(
+    "invalid_dsn",
+    [
+        "postgresql://localhost",
+        "postgresql://localhost/",
+        "postgresql+psycopg://user:pass@localhost:5432",
+    ],
+)
+def test_checkpoint_dsn_requires_explicit_database(invalid_dsn):
+    """Never silently checkpoint to a driver-selected default database."""
+    with pytest.raises(ValueError, match="name a database"):
+        durable_planning.checkpoint_dsn(invalid_dsn)
+
+
+@pytest.mark.parametrize(
+    "invalid_dsn",
+    [
+        " postgresql://localhost/app",
+        "postgresql://localhost/app ",
+        "postgresql://localhost/app\n",
+        "postgresql://localhost/app\t",
+        "postgresql://localhost/app\u200b",
+        "postgresql://localhost/app\x00",
+    ],
+)
+def test_checkpoint_dsn_rejects_invisible_configuration_characters(invalid_dsn):
+    """Never silently reinterpret or forward ambiguous checkpoint connections."""
+    with pytest.raises(ValueError, match="unsafe whitespace or controls"):
+        durable_planning.checkpoint_dsn(invalid_dsn)

@@ -1,59 +1,46 @@
 # ApplicationOS Roadmap
 
-Target: portfolio-ready MVP by November 15, 2026.
+## Release policy
 
-## Product goal
-Turn unstructured application instructions, emails, and documents into an executable workflow with requirements, evidence, dependencies, deadlines, inconsistencies, and approved next actions.
-
-## MVP milestones
-
-### 1. Foundation
-- Monorepo structure for API and web app
-- FastAPI backend
-- Next.js + TypeScript frontend
-- PostgreSQL + pgvector data model
-- Docker Compose local environment
-- Shared configuration and environment templates
-
-### 2. Document intelligence
-- PDF/text upload pipeline
-- S3-compatible storage abstraction
-- Structured extraction with source citations
-- Requirement detection and normalization
-- Evidence linking between requirements and documents
-
-### 3. Agentic workflow
-- LangGraph state machine
-- Planner, extractor, verifier, and action nodes
-- Requirement graph with dependencies
-- Missing and inconsistent requirement detection
-- Human approval gate for external actions
-- Retry and failure state handling
-
-### 4. Product experience
-- Application dashboard
-- Requirement status view
-- Evidence/source view
-- Workflow timeline
-- Action approval UI
-- Demo apartment-application workflow
-
-### 5. Cloud and infrastructure
-- Docker images for API and worker
-- SQS-backed background processing
-- S3 document storage
-- AWS deployment target
-- Kubernetes manifests / EKS-ready deployment
-- GitHub Actions CI/CD
-- CloudWatch/OpenTelemetry observability
-
-### 6. Quality bar
-- PyTest backend suite
-- Playwright critical-path tests
-- Agent evaluation fixtures
-- Failure/retry tests
-- README with architecture and demo instructions
-- Deployed public demo
+**No fixed public-demo deadline.** Complete and verify the product locally before attempting hosting. Work on `dev`; promote only tested, stable checkpoints to `main`. Keep total infrastructure spend at **$0** and never commit credentials.
 
 ## Definition of done
-A user can upload application instructions and supporting documents, receive a structured requirement graph, see satisfied/missing/inconsistent requirements with evidence, approve a suggested action, and observe the workflow update end-to-end.
+
+A clean local checkout can start the full stack and complete a real, reproducible synthetic apartment-application journey:
+
+1. Upload bounded PDF/text instructions and supporting evidence, preserving source identity, excerpts, and provenance.
+2. Extract and persist reviewable requirements and their dependencies without treating instructions as proof of satisfaction.
+3. Link and verify evidence, showing missing, pending, verified, and inconsistent states with traceable reasons.
+4. Prepare a durable workflow, require authenticated human approval, and execute only explicitly permitted actions.
+5. Recover safely from worker interruption and retries without duplicating consequential actions.
+6. Inspect the workflow timeline, evidence, approvals, errors, and outcomes through a polished, responsive Next.js interface backed by the real FastAPI service.
+
+## Engineering workstreams
+
+### Persistence and document intelligence
+- PostgreSQL/pgvector schema, migrations, restart persistence, and integration tests.
+- Safe PDF/text parsing with size and resource bounds, sanitized metadata, and source provenance.
+- Requirement extraction, dependency graph, state transitions, and evidence verification.
+- Hallucination/evidence regression fixtures: unsupported claims must remain unverified.
+
+### Durable, approval-gated orchestration
+- LangGraph nodes and persisted checkpoints.
+- Worker ownership/leases, retry budgets, idempotency, interruption recovery, and safe terminal states.
+- Operator identity, auditable approvals/rejections, and authorization rechecks immediately before consequential actions.
+- No external side effects in tests or demos; use synthetic adapters.
+
+### Product experience
+- Complete Next.js → FastAPI integration for uploads, requirements, evidence, approvals, and workflow history.
+- Responsive, accessible interface with intentional empty/loading/error/success states.
+- No placeholder buttons or mocked API data presented as production functionality.
+
+### Verification and release gates
+- Ruff, PyTest, PostgreSQL/pgvector integration tests, TypeScript check, and Next.js production build pass.
+- Playwright covers the **real** frontend/backend/database journey; mocked browser tests alone are insufficient.
+- Docker-based clean-start smoke test, restart/recovery tests, and reproducible synthetic fixtures pass.
+- Secrets review, security hygiene, logging/observability, architecture and demo documentation complete.
+- Only then evaluate free-tier Netlify/Render/Neon hosting and perform public smoke tests; no paid provisioning.
+
+## Status discipline
+
+A committed test is not a passing test. A passing mocked browser test is not an integrated end-to-end test. Report implementation, verified checks, remaining blockers, and deployment separately. Completion percentages are estimates, not substitutes for the release gates above.

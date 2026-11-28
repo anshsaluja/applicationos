@@ -20,14 +20,29 @@ def evaluate_requirements(requirements: list[Requirement]) -> EvaluationResult:
     without evidence are missing. A dependency that is not satisfied blocks its dependents.
     """
     by_id = {requirement.id: requirement for requirement in requirements}
-    evaluated: list[Requirement] = []
+    if len(by_id) != len(requirements):
+        # Duplicate identities make dependency resolution ambiguous; never
+        # silently select the last record and mark the graph satisfied.
+        raise ValueError("Duplicate requirement identifiers in evaluation graph")
+    resolved: dict = {}
+    visiting: set = set()
 
-    for requirement in requirements:
+    def resolve(requirement_id):
+        # Resolve the graph rather than trusting stale, caller-supplied statuses.
+        # Missing references and dependency cycles fail closed.
+        if requirement_id not in by_id or requirement_id in visiting:
+            return RequirementStatus.BLOCKED
+        if requirement_id in resolved:
+            return resolved[requirement_id]
+
+        requirement = by_id[requirement_id]
+        visiting.add(requirement_id)
         dependency_blocked = any(
-            dependency not in by_id
-            or by_id[dependency].status not in {RequirementStatus.SATISFIED}
+            resolve(dependency) != RequirementStatus.SATISFIED
             for dependency in requirement.depends_on
         )
+        visiting.remove(requirement_id)
+
         if dependency_blocked:
             status = RequirementStatus.BLOCKED
         elif _has_conflicting_evidence(requirement.evidence):
@@ -36,7 +51,13 @@ def evaluate_requirements(requirements: list[Requirement]) -> EvaluationResult:
             status = RequirementStatus.SATISFIED
         else:
             status = RequirementStatus.MISSING
-        evaluated.append(requirement.model_copy(update={"status": status}))
+        resolved[requirement_id] = status
+        return status
+
+    evaluated = [
+        requirement.model_copy(update={"status": resolve(requirement.id)})
+        for requirement in requirements
+    ]
 
     return EvaluationResult(
         requirements=evaluated,
@@ -46,9 +67,15 @@ def evaluate_requirements(requirements: list[Requirement]) -> EvaluationResult:
 
 
 def _has_conflicting_evidence(evidence: list[Evidence]) -> bool:
-    """Flag distinct normalized excerpts for the same source label as conflicting evidence."""
-    values_by_label: dict[str, set[str]] = {}
+    """Flag contradictory excerpts within the same document and source label.
+
+    Labels are user-facing descriptions and may recur across independent
+    documents. Do not treat two distinct documents as contradictory merely
+    because they both use a generic label such as "income".
+    """
+    values_by_source: dict[tuple[str, str], set[str]] = {}
     for item in evidence:
         normalized = " ".join(item.excerpt.casefold().split())
-        values_by_label.setdefault(item.source_label.casefold(), set()).add(normalized)
-    return any(len(values) > 1 for values in values_by_label.values())
+        source_key = (str(item.source_document_id), " ".join(item.source_label.casefold().split()))
+        values_by_source.setdefault(source_key, set()).add(normalized)
+    return any(len(values) > 1 for values in values_by_source.values())

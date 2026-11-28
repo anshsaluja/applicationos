@@ -1,0 +1,85 @@
+"""Opt-in durable LangGraph planning with PostgreSQL checkpoints.
+
+This is an advisory planning boundary, not an execution queue. Every action
+must still pass transactional approval and idempotency checks in persistence.
+"""
+from __future__ import annotations
+
+import unicodedata
+from collections.abc import Iterator
+from contextlib import contextmanager
+from uuid import UUID
+
+from langgraph.checkpoint.postgres import PostgresSaver
+from sqlalchemy.engine import make_url
+
+from .planning_graph import build_planning_graph
+
+
+def checkpoint_config(thread_id: UUID | str) -> dict:
+    """Use a stable, nonempty action identifier to isolate graph histories."""
+    if not isinstance(thread_id, (UUID, str)):
+        raise TypeError("thread_id must be a UUID or string")
+    identifier = str(thread_id)
+    # Checkpoint keys are persisted and reused across restarts: never silently
+    # normalize an ambiguous identifier into a different workflow identity.
+    if (
+        not identifier
+        or identifier != identifier.strip()
+        or len(identifier.encode("utf-8", errors="surrogatepass")) > 128
+        or unicodedata.normalize("NFC", identifier) != identifier
+        or any(
+            char.isspace() or unicodedata.category(char) in {"Cc", "Cf", "Cs", "Co", "Cn"}
+            for char in identifier
+        )
+    ):
+        raise ValueError("A stable, bounded, printable thread_id is required")
+    return {"configurable": {"thread_id": identifier}}
+
+
+def checkpoint_dsn(database_url: str) -> str:
+    """Normalize a SQLAlchemy PostgreSQL URL for psycopg's checkpoint saver.
+
+    Reject other database dialects instead of accidentally opening a different
+    database. Preserve URL-encoded credentials when rendering the connection URL.
+    """
+    if not isinstance(database_url, str):
+        raise TypeError("PostgreSQL checkpoint DSN must be a string")
+    if not database_url or not database_url.strip():
+        raise ValueError("PostgreSQL checkpoint DSN is required")
+    # Connection strings are configuration identities: reject invisible characters
+    # rather than silently trimming or passing them to the PostgreSQL driver.
+    if database_url != database_url.strip() or any(
+        unicodedata.category(char) in {"Cc", "Cf", "Cs"} for char in database_url
+    ):
+        raise ValueError("PostgreSQL checkpoint DSN contains unsafe whitespace or controls")
+    # SQLAlchemy treats literal URL fragments as part of the database/query,
+    # silently changing checkpoint identity or connection options.
+    if "#" in database_url:
+        raise ValueError("PostgreSQL checkpoint DSN must not contain a URL fragment")
+    try:
+        url = make_url(database_url)
+    except Exception as exc:
+        raise ValueError("Invalid PostgreSQL checkpoint DSN") from exc
+    if url.drivername not in ("postgresql", "postgresql+psycopg"):
+        raise ValueError("PostgreSQL checkpoint DSN must use psycopg")
+    if not url.database or not url.database.strip():
+        raise ValueError("PostgreSQL checkpoint DSN must name a database")
+    return url.set(drivername="postgresql").render_as_string(hide_password=False)
+
+
+@contextmanager
+def postgres_planning_graph(database_url: str, *, initialize: bool = False) -> Iterator:
+    """Open a durable planner for the lifetime of a database connection.
+
+    Run setup only during an explicit initialization/migration step, not on
+    every API request. Reopen this context with the same database and thread
+    identifier to inspect or resume saved checkpoints after process restart.
+
+    Note: use a psycopg-compatible PostgreSQL DSN; this helper never sends
+    workflow actions or accepts graph state as execution authorization.
+    """
+    with PostgresSaver.from_conn_string(checkpoint_dsn(database_url)) as saver:
+        if initialize:
+            saver.setup()
+        yield build_planning_graph(checkpointer=saver)
